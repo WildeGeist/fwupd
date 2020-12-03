@@ -384,12 +384,12 @@ fu_synaptics_rmi_firmware_parse (FuFirmware *firmware,
 	case 6:
 		if (!fu_synaptics_rmi_firmware_parse_v0x (firmware, fw, error))
 			return FALSE;
-		self->hasBlv5Signature = ((self->io & 0x10) >> 1);
-		if (self->hasBlv5Signature){
-			for (gint i = 0 ; i < RMI_IMG_SIGNATURE_SIZE_SIZE ; i++){
-				self->blv5SignatureSize |= (data[RMI_IMG_SIGNATURE_SIZE_OFFSET + i] & 0x00FF) << (8*i);
+		self->hasBlv5Signature = (self->io & 0x10) >> 1;
+		if (self->hasBlv5Signature) {
+			for (guint i = 0 ; i < RMI_IMG_SIGNATURE_SIZE_SIZE; i++){
+				self->blv5SignatureSize |= (data[RMI_IMG_SIGNATURE_SIZE_OFFSET + i] & 0x00FF) << (8 * i);
 			}
-			g_debug ("Blv5 signature size : %ld\n", self->blv5SignatureSize);
+			g_debug ("Blv5 signature size: %ld", self->blv5SignatureSize);
 		}
 		break;
 	case 16:

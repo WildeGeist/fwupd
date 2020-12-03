@@ -69,7 +69,7 @@ WriteByte (FuSynapticsRmiPs2Device *self, guint8 buf, guint timeout, GError **er
 		do_write = FALSE;
 		g_debug ("wrote byte: 0x%x, attempt to read acknowledge...", buf);
 
-		if(!ReadACK (self, &res, &error_local)) {
+		if (!ReadACK (self, &res, &error_local)) {
 			g_debug ("read Failed: %s", error_local->message);
 			continue;
 		}
@@ -98,136 +98,216 @@ WriteByte (FuSynapticsRmiPs2Device *self, guint8 buf, guint timeout, GError **er
 }
 
 static gboolean
-WriteRMIRegister (FuSynapticsRmiPs2Device *self, 
-				 guint8 addr, 
-				 const guint8 *buf, 
-				 guint8 len, 
-				 guint timeout, 
+fu_synaptics_rmi_ps2_device_set_resolution_sequence (FuSynapticsRmiPs2Device *self,
+						     guint8 arg,
+						     gboolean send_e6s,
+						     GError **error)
+{
+	g_debug ("Set Resolution Sequence: arg = 0x%x", arg);
+
+	/* send set scaling twice if send_e6s */
+	for (gint i = send_e6s ? 2 : 1; i > 0; --i) {
+		if (!WriteByte (self, edpAuxSetScaling1To1, 50, error))
+			return FALSE;
+	}
+
+	for (gint i = 3; i >= 0; --i) {
+		guint8 ucTwoBitArg = (arg >> (i * 2)) & 0x3;
+		if (!WriteByte (self, edpAuxSetResolution, 50, error)) {
+			return FALSE;
+		}
+		g_debug ("Send ucTwoBitArg = 0x%x", ucTwoBitArg);
+		if (!WriteByte (self, ucTwoBitArg, 50, error))
+			return FALSE;
+	}
+	return TRUE;
+}
+
+static gboolean
+fu_synaptics_rmi_ps2_device_sample_rate_sequence (FuSynapticsRmiPs2Device *self,
+						  guint8 param,
+						  guint8 arg,
+						  gboolean send_e6s,
+						  GError **error)
+{
+	/* allow 3 retries */
+	for (guint i = 0; i < 3; i++) {
+		g_autoptr(GError) error_local = NULL;
+		if (i > 0) {
+			/* always send two E6s when retrying */
+			send_e6s = TRUE;
+		}
+		if (!fu_synaptics_rmi_ps2_device_set_resolution_sequence (self, arg, send_e6s, &error_local) ||
+		    !WriteByte (self, edpAuxSetSampleRate, 50, &error_local) ||
+		    !WriteByte (self, param, 50, &error_local)) {
+			g_warning ("failed, will retry: %s", error_local->message);
+			continue;
+		}
+		return TRUE;
+	}
+
+	g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "too many tries");
+	return FALSE;
+}
+
+static gboolean
+fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (FuSynapticsRmiPs2Device *self,
+						      GError **error)
+{
+	g_debug ("Enable RMI backdoor");
+
+	/* disable stream */
+	if (!WriteByte (self, edpAuxDisable, 50, error)) {
+		g_prefix_error (error, "failed to disable stream mode: ");
+		return FALSE;
+	}
+
+	/* enable RMI mode */
+	if (!fu_synaptics_rmi_ps2_device_sample_rate_sequence (self,
+							       essrSetModeByte2,
+							       edpAuxFullRMIBackDoor,
+							       FALSE,
+							       error)) {
+		g_prefix_error (error, "failed to enter RMI mode: ");
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+WriteRMIRegister (FuSynapticsRmiPs2Device *self,
+				 guint8 addr,
+				 const guint8 *buf,
+				 guint8 len,
+				 guint timeout,
 				 GError **error)
 {
 
-	if (!self->inRMIBackdoor && !fu_synaptics_rmi_ps2_device_enable_RMI_backdoor (self, error)) {
+	if (!self->inRMIBackdoor &&
+	    !fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
-		
 
 	if (!WriteByte (self, edpAuxSetScaling2To1, timeout, error)) {
-		g_prefix_error (error, "failed to WriteByte: ");
+		g_prefix_error (error, "failed to edpAuxSetScaling2To1: ");
 		return FALSE;
 	}
-
 	if (!WriteByte (self, edpAuxSetSampleRate, timeout, error)) {
-		g_prefix_error (error, "failed to WriteByte: ");
+		g_prefix_error (error, "failed to edpAuxSetSampleRate: ");
 		return FALSE;
 	}
-
 	if (!WriteByte (self, addr, timeout, error)) {
-		g_prefix_error (error, "failed to WriteByte: ");
+		g_prefix_error (error, "failed to write address: ");
 		return FALSE;
 	}
-
-	for (guint8 numBytes = 0 ; numBytes < len ; numBytes++){
+	for (guint8 numBytes = 0; numBytes < len; numBytes++) {
 		if (!WriteByte (self, edpAuxSetSampleRate, timeout, error)) {
 			g_prefix_error (error, "failed to WriteByte: ");
 			return FALSE;
 		}
-
 		if (!WriteByte(self, *(buf + numBytes), timeout, error)) {
 			g_prefix_error (error, "failed to WriteByte: ");
 			return FALSE;
 		}
 	}
-	
 
-	g_usleep (1000*20);
-
+	/* success */
+	g_usleep (1000 * 20);
 	return TRUE;
 }
 
 static gboolean
-ReadRMIRegister (FuSynapticsRmiPs2Device *self, 
-				guint8 addr, 
-				guint8 * buf,
+ReadRMIRegister (FuSynapticsRmiPs2Device *self,
+				guint8 addr,
+				guint8 *buf,
 				GError **error)
 {
+	guint32 response = 0;
+
+	/* maybe return val if fail? */
 	if (buf == NULL) {
+		g_set_error_literal (error,
+				     G_IO_ERROR,
+				     G_IO_ERROR_FAILED,
+				     "no buffer set!");
 		return FALSE;
 	}
 
 	g_debug ("ReadRMIRegister: register address = 0x%x", addr);
-	if (!self->inRMIBackdoor && !fu_synaptics_rmi_ps2_device_enable_RMI_backdoor (self, error)) {
+	if (!self->inRMIBackdoor &&
+	    !fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
-
-	g_autoptr(GError) error_local = NULL;
-	if (!(WriteByte (self, edpAuxSetScaling2To1, 0, &error_local) && WriteByte (self, edpAuxSetSampleRate, 0, &error_local)
-		&& WriteByte (self, addr, 0, &error_local) && WriteByte (self, edpAuxStatusRequest, 0, &error_local)))
-	{
-		g_warning ("failed to write command in Read RMI Register: %s", error_local->message);
+	if (!WriteByte (self, edpAuxSetScaling2To1, 0, error) ||
+	    !WriteByte (self, edpAuxSetSampleRate, 0, error) ||
+	    !WriteByte (self, addr, 0, error) ||
+	    !WriteByte (self, edpAuxStatusRequest, 0, error)) {
+		g_prefix_error (error, "failed to write command in Read RMI register: ");
 		return FALSE;
 	}
-
-	guint32 response = 0;
-	for (gint i = 0; i < 3; ++i) {
+	for (guint i = 0; i < 3; i++) {
 		guint8 tmp = 0;
-		if(!ReadByte (self, &tmp, 0, error)) {
-			g_prefix_error (error, "failed to Read byte: ");
+		if (!ReadByte (self, &tmp, 0, error)) {
+			g_prefix_error (error, "failed to read byte %u: ", i);
 			return FALSE;
 		}
 		response = response | (tmp << (8 * i));
 	}
 
-	// We only care about the least significant byte since that is what contains the value
-	// of the register at the address addr
-	*buf = (guint8)response;
+	/* we only care about the least significant byte since that
+	 * is what contains the value of the register at the address addr */
+	*buf = (guint8) response;
 	g_debug ("RMI value == 0x%x", *buf);
 
-	g_usleep (1000*20);
-
+	/* success */
+	g_usleep (1000 * 20);
 	g_debug ("Finished Read RMI Register");
-
 	return TRUE;
 }
 
 static gboolean
 ReadRMIPacketRegister(FuSynapticsRmiPs2Device *self,
-					  guint8 addr, 
-					  guint8 * buf, 
-					  gint len, 
+					  guint8 addr,
+					  guint8 *buf,
+					  guint len,
 					  GError **error)
 {
+	/* maybe return val if fail? */
 	if (buf == NULL) {
+		g_set_error_literal (error,
+				     G_IO_ERROR,
+				     G_IO_ERROR_FAILED,
+				     "no buffer set!");
 		return FALSE;
 	}
 
 	g_debug ("ReadRMIPacketRegister: register address = 0x%x", addr);
-	if (!self->inRMIBackdoor && !fu_synaptics_rmi_ps2_device_enable_RMI_backdoor (self, error)) {
+	if (!self->inRMIBackdoor &&
+	    !fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
-
-	g_autoptr(GError) error_local = NULL;
-	if (!(WriteByte (self, edpAuxSetScaling2To1, 0, &error_local) && WriteByte (self, edpAuxSetSampleRate, 0, &error_local)
-		&& WriteByte (self, addr, 0, &error_local) && WriteByte (self, edpAuxStatusRequest, 0, &error_local)))
-	{
-		g_warning ("failed to write command in Read RMI Packet Register: %s", error_local->message);
+	if (!WriteByte (self, edpAuxSetScaling2To1, 0, error) ||
+	    !WriteByte (self, edpAuxSetSampleRate, 0, error) ||
+	    !WriteByte (self, addr, 0, error) ||
+	    !WriteByte (self, edpAuxStatusRequest, 0, error)) {
+		g_prefix_error (error, "failed to write command in Read RMI Packet Register: ");
 		return FALSE;
 	}
-
-	for (gint i = 0; i < len; ++i) {
+	for (guint i = 0; i < len; ++i) {
 		guint8 tmp = 0;
-		if(!ReadByte (self, &tmp, 0, error)) {
+		if (!ReadByte (self, &tmp, 0, error)) {
+			g_prefix_error (error, "failed to read byte %u: ", i);
 			return FALSE;
 		}
-		*(buf+i) = tmp;
+		*(buf + i) = tmp;
 	}
 
-	g_usleep (1000*20);
-
+	g_usleep (1000 * 20);
 	g_debug ("Finished Read RMI Packet Register");
-
 	return TRUE;
 }
 
@@ -347,81 +427,6 @@ fu_synaptics_rmi_ps2_device_write_firmware (FuDevice *device,
 }
 
 static gboolean
-fu_synaptics_rmi_ps2_device_set_resolution_sequence (FuSynapticsRmiPs2Device *self,
-						     guint8 arg,
-						     gboolean send_e6s,
-						     GError **error)
-{
-	g_debug ("Set Resolution Sequence: arg = 0x%x", arg);
-
-	/* send set scaling twice if send_e6s */
-	for (gint i = send_e6s ? 2 : 1; i > 0; --i) {
-		if (!WriteByte (self, edpAuxSetScaling1To1, 50, error))
-			return FALSE;
-	}
-
-	for (gint i = 3; i >= 0; --i) {
-		guint8 ucTwoBitArg = (arg >> (i * 2)) & 0x3;
-		if (!WriteByte (self, edpAuxSetResolution, 50, error)) {
-			return FALSE;
-		}
-		g_debug ("Send ucTwoBitArg = 0x%x", ucTwoBitArg);
-		if (!WriteByte (self, ucTwoBitArg, 50, error))
-			return FALSE;
-	}
-	return TRUE;
-}
-
-static gboolean
-fu_synaptics_rmi_ps2_device_set_sample_rate_sequence (FuSynapticsRmiPs2Device *self,
-						      guint8 param,
-						      guint8 arg,
-						      gboolean send_e6s,
-						      GError **error)
-{
-	/* allow 3 retries */
-	for (guint i = 0; i < 3; i++) {
-		g_autoptr(GError) error_local = NULL;
-		if (i > 0) {
-			/* always send two E6s when retrying */
-			send_e6s = TRUE;
-		}
-		if (!fu_synaptics_rmi_ps2_device_set_resolution_sequence (self, arg, send_e6s, &error_local) ||
-		    !WriteByte (self, edpAuxSetSampleRate, 50, &error_local) ||
-		    !WriteByte (self, param, 50, &error_local)) {
-			g_warning ("failed, will retry: %s", error_local->message);
-			continue;
-		}
-		return TRUE;
-	}
-
-	g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "too many tries");
-	return FALSE;
-}
-
-gboolean
-fu_synaptics_rmi_ps2_device_enable_RMI_backdoor (FuSynapticsRmiPs2Device *self,
-						      GError **error)
-{
-	g_debug ("Enable RMI backdoor");
-
-	/* disable stream */
-	if (!WriteByte (self, edpAuxDisable, 50, error)) {
-		g_prefix_error (error, "failed to disable stream mode: ");
-		return FALSE;
-	}
-
-	/* enable RMI mode */
-	if (!fu_synaptics_rmi_ps2_device_set_sample_rate_sequence (self, essrSetModeByte2, edpAuxFullRMIBackDoor, FALSE, error)) {
-		g_prefix_error (error, "failed to enter RMI mode: ");
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-
-static gboolean
 fu_synaptics_rmi_ps2_device_detach (FuDevice *device, GError **error)
 {
 	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (device);
@@ -447,7 +452,7 @@ fu_synaptics_rmi_ps2_device_detach (FuDevice *device, GError **error)
 	if (!fu_device_open (device, error))
 		return FALSE;
 
-	if (!fu_synaptics_rmi_ps2_device_enable_RMI_backdoor (self, error)){
+	if (!fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)){
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
