@@ -317,7 +317,7 @@ fu_synaptics_rmi_hid_device_close (FuUdevDevice *device, GError **error)
 }
 
 static gboolean
-fu_synaptics_rmi_device_rebind_driver (FuSynapticsRmiDevice *self, GError **error)
+fu_synaptics_rmi_hid_device_rebind_driver (FuSynapticsRmiDevice *self, GError **error)
 {
 	GUdevDevice *udev_device = fu_udev_device_get_dev (FU_UDEV_DEVICE (self));
 	const gchar *hid_id;
@@ -378,7 +378,7 @@ fu_synaptics_rmi_device_rebind_driver (FuSynapticsRmiDevice *self, GError **erro
 }
 
 static gboolean
-fu_synaptics_rmi_v5_device_detach (FuDevice *device, GError **error)
+fu_synaptics_rmi_device_detach_v5 (FuDevice *device, GError **error)
 {
 	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
 	FuSynapticsRmiFlash *flash = fu_synaptics_rmi_device_get_flash (self);
@@ -412,7 +412,7 @@ fu_synaptics_rmi_v5_device_detach (FuDevice *device, GError **error)
 }
 
 static gboolean
-fu_synaptics_rmi_v7_device_detach (FuDevice *device, GError **error)
+fu_synaptics_rmi_device_detach_v7 (FuDevice *device, GError **error)
 {
 	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
 	g_autoptr(GByteArray) enable_req = g_byte_array_new ();
@@ -455,7 +455,7 @@ fu_synaptics_rmi_v7_device_detach (FuDevice *device, GError **error)
 }
 
 static gboolean
-fu_synaptics_rmi_device_detach (FuDevice *device, GError **error)
+fu_synaptics_rmi_hid_device_detach (FuDevice *device, GError **error)
 {
 	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
 	FuSynapticsRmiFunction *f34;
@@ -465,10 +465,10 @@ fu_synaptics_rmi_device_detach (FuDevice *device, GError **error)
 		return FALSE;
 	if (f34->function_version == 0x0 ||
 	    f34->function_version == 0x1) {
-		if (!fu_synaptics_rmi_v5_device_detach (device, error))
+		if (!fu_synaptics_rmi_device_detach_v5 (device, error))
 			return FALSE;
 	} else if (f34->function_version == 0x2) {
-		if (!fu_synaptics_rmi_v7_device_detach (device, error))
+		if (!fu_synaptics_rmi_device_detach_v7 (device, error))
 			return FALSE;
 	} else {
 		g_set_error (error,
@@ -478,11 +478,11 @@ fu_synaptics_rmi_device_detach (FuDevice *device, GError **error)
 			     f34->function_version);
 		return FALSE;
 	}
-	return fu_synaptics_rmi_device_rebind_driver (self, error);
+	return fu_synaptics_rmi_hid_device_rebind_driver (self, error);
 }
 
 static gboolean
-fu_synaptics_rmi_device_attach (FuDevice *device, GError **error)
+fu_synaptics_rmi_hid_device_attach (FuDevice *device, GError **error)
 {
 	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
 
@@ -498,7 +498,7 @@ fu_synaptics_rmi_device_attach (FuDevice *device, GError **error)
 
 	/* rebind to rescan PDT with new firmware running */
 	fu_device_set_status (device, FWUPD_STATUS_DEVICE_RESTART);
-	return fu_synaptics_rmi_device_rebind_driver (self, error);
+	return fu_synaptics_rmi_hid_device_rebind_driver (self, error);
 }
 
 static gboolean
@@ -537,8 +537,8 @@ fu_synaptics_rmi_hid_device_class_init (FuSynapticsRmiHidDeviceClass *klass)
 	FuDeviceClass *klass_device = FU_DEVICE_CLASS (klass);
 	FuSynapticsRmiDeviceClass *klass_rmi = FU_SYNAPTICS_RMI_DEVICE_CLASS (klass);
 	FuUdevDeviceClass *klass_udev = FU_UDEV_DEVICE_CLASS (klass);
-	klass_device->attach = fu_synaptics_rmi_device_attach;
-	klass_device->detach = fu_synaptics_rmi_device_detach;
+	klass_device->attach = fu_synaptics_rmi_hid_device_attach;
+	klass_device->detach = fu_synaptics_rmi_hid_device_detach;
 	klass_udev->probe = fu_synaptics_rmi_hid_device_probe;
 	klass_udev->open = fu_synaptics_rmi_hid_device_open;
 	klass_udev->close = fu_synaptics_rmi_hid_device_close;
