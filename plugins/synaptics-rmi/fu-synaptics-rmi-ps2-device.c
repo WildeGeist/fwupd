@@ -11,13 +11,13 @@
 #include "fu-io-channel.h"
 
 struct _FuSynapticsRmiPs2Device {
-	FuUdevDevice		 parent_instance;
+	FuSynapticsRmiDevice	 parent_instance;
 	FuIOChannel		*io_channel;
 	guint8			 currentPage;
 	gboolean		 inRMIBackdoor;
 };
 
-G_DEFINE_TYPE (FuSynapticsRmiPs2Device, fu_synaptics_rmi_ps2_device, FU_TYPE_UDEV_DEVICE)
+G_DEFINE_TYPE (FuSynapticsRmiPs2Device, fu_synaptics_rmi_ps2_device, FU_TYPE_SYNAPTICS_RMI_DEVICE)
 
 static gboolean
 ReadACK (FuSynapticsRmiPs2Device *self, guint8 *pbuf, GError **error) //FIXME: rename to fu_synaptics_rmi_ps2_device_read_ack

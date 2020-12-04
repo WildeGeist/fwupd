@@ -1,6 +1,6 @@
 [DeviceInstanceId=HIDRAW\VEN_06CB]
 Plugin = synaptics_rmi
-GType = FuSynapticsRmiDevice
+GType = FuSynapticsRmiHidDevice
 Vendor = Synaptics
 
 # Dell K12A kbd-dock

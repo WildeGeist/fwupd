@@ -389,7 +389,8 @@ fu_synaptics_rmi_firmware_parse (FuFirmware *firmware,
 			for (guint i = 0 ; i < RMI_IMG_SIGNATURE_SIZE_SIZE; i++){
 				self->blv5SignatureSize |= (data[RMI_IMG_SIGNATURE_SIZE_OFFSET + i] & 0x00FF) << (8 * i);
 			}
-			g_debug ("Blv5 signature size: %ld", self->blv5SignatureSize);
+			g_debug ("Blv5 signature size: %" G_GUINT32_FORMAT,
+				 self->blv5SignatureSize);
 		}
 		break;
 	case 16:
