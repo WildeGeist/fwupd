@@ -14,7 +14,6 @@
 struct _FuSynapticsRmiPs2Device {
 	FuSynapticsRmiDevice	 parent_instance;
 	FuIOChannel		*io_channel;
-	guint8			 currentPage;
 	gboolean		 inRMIBackdoor;
 };
 
@@ -328,24 +327,6 @@ fu_synaptics_rmi_ps2_device_read_rmi_packet_register (FuSynapticsRmiPs2Device *s
 	return g_steal_pointer (&buf);
 }
 
-static gboolean 
-fu_synaptics_rmi_ps2_device_set_rmi_page (FuSynapticsRmiPs2Device *self,
-					  guint page,
-					  GError **error)
-{
-	guint8 buf = (guint8) page;
-	if (self->currentPage == page)
-		return TRUE;
-
-	if (!fu_synaptics_rmi_ps2_device_write_rmi_register (self, 0xFF, &buf, 1, 20, error)) {
-		g_prefix_error (error, "failed to write page %u: ", page);
-		return FALSE;
-	}
-
-	self->currentPage = page;
-	return TRUE;
-}
-
 static GByteArray *
 fu_synaptics_rmi_ps2_device_read (FuSynapticsRmiDevice *rmi_device,
 				  guint16 addr,
@@ -356,7 +337,7 @@ fu_synaptics_rmi_ps2_device_read (FuSynapticsRmiDevice *rmi_device,
 	g_autoptr(GByteArray) buf = NULL;
 	gboolean isPacketRegister = TRUE; //FIXME?! How do we know?!
 
-	if (!fu_synaptics_rmi_ps2_device_set_rmi_page (self, addr >> 8, error)) {
+	if (!fu_synaptics_rmi_device_set_rma_page (rmi_device, addr >> 8, error)) {
 		g_prefix_error (error, "failed to set RMI page:");
 		return FALSE;
 	}
@@ -404,9 +385,9 @@ fu_synaptics_rmi_ps2_device_write (FuSynapticsRmiDevice *rmi_device,
 {
 	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (rmi_device);
 	guint32 timeout = 999; //FIXME
-	if (!fu_synaptics_rmi_ps2_device_set_rmi_page (self,
-						       addr >> 8,
-						       error)) {
+	if (!fu_synaptics_rmi_device_set_rma_page (rmi_device,
+						   addr >> 8,
+						   error)) {
 		g_prefix_error (error, "failed to set RMI page: ");
 		return FALSE;
 	}
