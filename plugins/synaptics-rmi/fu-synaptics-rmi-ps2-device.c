@@ -552,6 +552,12 @@ fu_synaptics_rmi_ps2_device_detach (FuDevice *device, GError **error)
 }
 
 static gboolean
+fu_synaptics_rmi_ps2_device_setup (FuDevice *device, GError **error)
+{
+	return TRUE;
+}
+
+static gboolean
 fu_synaptics_rmi_ps2_device_attach (FuDevice *device, GError **error)
 {
 	/* sanity check */
@@ -600,6 +606,7 @@ fu_synaptics_rmi_ps2_device_class_init (FuSynapticsRmiPs2DeviceClass *klass)
 	object_class->finalize = fu_synaptics_rmi_ps2_device_finalize;
 	klass_device->attach = fu_synaptics_rmi_ps2_device_attach;
 	klass_device->detach = fu_synaptics_rmi_ps2_device_detach;
+	klass_device->setup = fu_synaptics_rmi_ps2_device_setup;
 	klass_device->write_firmware = fu_synaptics_rmi_ps2_device_write_firmware;
 	klass_udev->to_string = fu_synaptics_rmi_ps2_device_to_string;
 	klass_udev->probe = fu_synaptics_rmi_ps2_device_probe;
