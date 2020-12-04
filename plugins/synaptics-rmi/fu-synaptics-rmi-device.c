@@ -64,7 +64,6 @@ typedef struct
 	GPtrArray		*functions;
 	FuSynapticsRmiFunction	*f01;
 	FuSynapticsRmiFunction	*f34;
-	guint8			 current_rma_page;
 } FuSynapticsRmiDevicePrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (FuSynapticsRmiDevice, fu_synaptics_rmi_device, FU_TYPE_UDEV_DEVICE)
@@ -153,20 +152,16 @@ fu_synaptics_rmi_device_write (FuSynapticsRmiDevice *self,
 	return klass_rmi->write (self, addr, req, error);
 }
 
-gboolean
+static gboolean
 fu_synaptics_rmi_device_set_rma_page (FuSynapticsRmiDevice *self, guint8 page, GError **error)
 {
-	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
 	g_autoptr(GByteArray) req = g_byte_array_new ();
 
-	if (priv->current_rma_page == page)
-		return TRUE;
 	fu_byte_array_append_uint8 (req, page);
 	if (!fu_synaptics_rmi_device_write (self, RMI_DEVICE_PAGE_SELECT_REGISTER, req, error)) {
 		g_prefix_error (error, "failed to set RMA page 0x%x: ", page);
 		return FALSE;
 	}
-	priv->current_rma_page = page;
 	return TRUE;
 }
 
@@ -659,7 +654,6 @@ fu_synaptics_rmi_device_init (FuSynapticsRmiDevice *self)
 	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
 	fu_device_set_protocol (FU_DEVICE (self), "com.synaptics.rmi");
 	fu_device_add_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_UPDATABLE);
-	priv->current_rma_page = 0xfe;
 	priv->functions = g_ptr_array_new_with_free_func (g_free);
 }
 
