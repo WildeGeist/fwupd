@@ -51,6 +51,7 @@ fu_synaptics_rmi_ps2_device_read_byte (FuSynapticsRmiPs2Device *self,
 				       guint timeout,
 				       GError **error)
 {
+	g_return_val_if_fail (timeout > 0, FALSE);
 	return fu_io_channel_read_raw (self->io_channel, pbuf, 0x1,
 				       NULL, timeout,
 				       FU_IO_CHANNEL_FLAG_NONE,
@@ -65,6 +66,8 @@ fu_synaptics_rmi_ps2_device_write_byte (FuSynapticsRmiPs2Device *self,
 					GError **error)
 {
 	gboolean do_write = TRUE;
+
+	g_return_val_if_fail (timeout > 0, FALSE);
 
 	for (guint i = 0; i < 3; i++) {
 		guint8 res = 0;
@@ -96,7 +99,7 @@ fu_synaptics_rmi_ps2_device_write_byte (FuSynapticsRmiPs2Device *self,
 			continue;
 		}
 		if (res == edpsError) {
-			g_debug ("fu_synaptics_rmi_ps2_device_write_byte fail received error from touchpad");
+			g_debug ("fail received error from touchpad");
 			do_write = TRUE;
 			g_usleep (1000 * 10);
 			continue;
@@ -197,6 +200,7 @@ fu_synaptics_rmi_ps2_device_write_rmi_register (FuSynapticsRmiPs2Device *self,
 						guint timeout,
 						GError **error)
 {
+	g_return_val_if_fail (timeout > 0, FALSE);
 	if (!fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
@@ -268,7 +272,7 @@ fu_synaptics_rmi_ps2_device_read_rmi_register (FuSynapticsRmiPs2Device *self,
 	}
 	for (guint i = 0; i < 3; i++) {
 		guint8 tmp = 0;
-		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 0, error)) {
+		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 500, error)) {
 			g_prefix_error (error, "failed to read byte %u: ", i);
 			return FALSE;
 		}
@@ -375,8 +379,8 @@ fu_synaptics_rmi_ps2_device_read (FuSynapticsRmiDevice *rmi_device,
 									    &tmp,
 									    error)) {
 				g_prefix_error (error,
-						"failed register read %x: ",
-						addr);
+						"failed register read 0x%x: ",
+						addr + i);
 				return FALSE;
 			}
 			fu_byte_array_append_uint8 (buf, tmp);
@@ -581,7 +585,6 @@ fu_synaptics_rmi_ps2_device_init (FuSynapticsRmiPs2Device *self)
 	fu_device_set_name (FU_DEVICE (self), "TouchStyk");
 	fu_device_set_vendor (FU_DEVICE (self), "Synaptics");
 	fu_device_set_vendor_id (FU_DEVICE (self), "HIDRAW:0x06CB");
-	fu_device_set_version_format (FU_DEVICE (self), FWUPD_VERSION_FORMAT_HEX); //FIXME?
 	fu_udev_device_set_flags (FU_UDEV_DEVICE (self),
 				  FU_UDEV_DEVICE_FLAG_OPEN_READ |
 				  FU_UDEV_DEVICE_FLAG_OPEN_WRITE);

@@ -529,7 +529,6 @@ fu_synaptics_rmi_hid_device_init (FuSynapticsRmiHidDevice *self)
 {
 	fu_device_set_name (FU_DEVICE (self), "Touchpad");
 	fu_device_set_remove_delay (FU_DEVICE (self), FU_DEVICE_REMOVE_DELAY_RE_ENUMERATE);
-	fu_device_set_version_format (FU_DEVICE (self), FWUPD_VERSION_FORMAT_TRIPLET);
 }
 
 static void
