@@ -21,7 +21,9 @@ struct _FuSynapticsRmiPs2Device {
 G_DEFINE_TYPE (FuSynapticsRmiPs2Device, fu_synaptics_rmi_ps2_device, FU_TYPE_SYNAPTICS_RMI_DEVICE)
 
 static gboolean
-ReadACK (FuSynapticsRmiPs2Device *self, guint8 *pbuf, GError **error) //FIXME: rename to fu_synaptics_rmi_ps2_device_read_ack
+fu_synaptics_rmi_ps2_device_read_ack (FuSynapticsRmiPs2Device *self,
+				      guint8 *pbuf,
+				      GError **error)
 {
 	for(guint i = 0 ; i < 60; i++) {
 		g_autoptr(GError) error_local = NULL;
@@ -45,7 +47,10 @@ ReadACK (FuSynapticsRmiPs2Device *self, guint8 *pbuf, GError **error) //FIXME: r
 
 /* read a single byte from the touchpad */
 static gboolean
-ReadByte (FuSynapticsRmiPs2Device *self, guint8 *pbuf, guint timeout, GError **error) //FIXME: rename to fu_synaptics_rmi_ps2_device_read_byte
+fu_synaptics_rmi_ps2_device_read_byte (FuSynapticsRmiPs2Device *self,
+				       guint8 *pbuf,
+				       guint timeout,
+				       GError **error)
 {
 	return fu_io_channel_read_raw (self->io_channel, pbuf, 0x1,
 				       NULL, timeout,
@@ -55,7 +60,10 @@ ReadByte (FuSynapticsRmiPs2Device *self, guint8 *pbuf, guint timeout, GError **e
 
 /* write a single byte to the touchpad and the read the acknowledge */
 static gboolean
-WriteByte (FuSynapticsRmiPs2Device *self, guint8 buf, guint timeout, GError **error) //FIXME: rename to fu_synaptics_rmi_ps2_device_write_byte
+fu_synaptics_rmi_ps2_device_write_byte (FuSynapticsRmiPs2Device *self,
+					guint8 buf,
+					guint timeout,
+					GError **error)
 {
 	gboolean do_write = TRUE;
 
@@ -66,13 +74,14 @@ WriteByte (FuSynapticsRmiPs2Device *self, guint8 buf, guint timeout, GError **er
 		if (do_write) {
 			if (!fu_io_channel_write_raw (self->io_channel, &buf, 0x1, timeout,
 						      FU_IO_CHANNEL_FLAG_FLUSH_INPUT | 
-							  FU_IO_CHANNEL_FLAG_USE_BLOCKING_IO, error))
+						      FU_IO_CHANNEL_FLAG_USE_BLOCKING_IO,
+						      error))
 				return FALSE;
 		}
 		do_write = FALSE;
 		g_debug ("wrote byte: 0x%x, attempt to read acknowledge...", buf);
 
-		if (!ReadACK (self, &res, &error_local)) {
+		if (!fu_synaptics_rmi_ps2_device_read_ack (self, &res, &error_local)) {
 			g_debug ("read Failed: %s", error_local->message);
 			continue;
 		}
@@ -88,7 +97,7 @@ WriteByte (FuSynapticsRmiPs2Device *self, guint8 buf, guint timeout, GError **er
 			continue;
 		}
 		if (res == edpsError) {
-			g_debug ("WriteByte fail received error from touchpad");
+			g_debug ("fu_synaptics_rmi_ps2_device_write_byte fail received error from touchpad");
 			do_write = TRUE;
 			g_usleep (1000 * 10);
 			continue;
@@ -110,17 +119,17 @@ fu_synaptics_rmi_ps2_device_set_resolution_sequence (FuSynapticsRmiPs2Device *se
 
 	/* send set scaling twice if send_e6s */
 	for (gint i = send_e6s ? 2 : 1; i > 0; --i) {
-		if (!WriteByte (self, edpAuxSetScaling1To1, 50, error))
+		if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetScaling1To1, 50, error))
 			return FALSE;
 	}
 
 	for (gint i = 3; i >= 0; --i) {
 		guint8 ucTwoBitArg = (arg >> (i * 2)) & 0x3;
-		if (!WriteByte (self, edpAuxSetResolution, 50, error)) {
+		if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetResolution, 50, error)) {
 			return FALSE;
 		}
 		g_debug ("Send ucTwoBitArg = 0x%x", ucTwoBitArg);
-		if (!WriteByte (self, ucTwoBitArg, 50, error))
+		if (!fu_synaptics_rmi_ps2_device_write_byte (self, ucTwoBitArg, 50, error))
 			return FALSE;
 	}
 	return TRUE;
@@ -141,8 +150,8 @@ fu_synaptics_rmi_ps2_device_sample_rate_sequence (FuSynapticsRmiPs2Device *self,
 			send_e6s = TRUE;
 		}
 		if (!fu_synaptics_rmi_ps2_device_set_resolution_sequence (self, arg, send_e6s, &error_local) ||
-		    !WriteByte (self, edpAuxSetSampleRate, 50, &error_local) ||
-		    !WriteByte (self, param, 50, &error_local)) {
+		    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetSampleRate, 50, &error_local) ||
+		    !fu_synaptics_rmi_ps2_device_write_byte (self, param, 50, &error_local)) {
 			g_warning ("failed, will retry: %s", error_local->message);
 			continue;
 		}
@@ -155,12 +164,12 @@ fu_synaptics_rmi_ps2_device_sample_rate_sequence (FuSynapticsRmiPs2Device *self,
 
 static gboolean
 fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (FuSynapticsRmiPs2Device *self,
-						      GError **error)
+						 GError **error)
 {
 	g_debug ("Enable RMI backdoor");
 
 	/* disable stream */
-	if (!WriteByte (self, edpAuxDisable, 50, error)) {
+	if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxDisable, 50, error)) {
 		g_prefix_error (error, "failed to disable stream mode: ");
 		return FALSE;
 	}
@@ -179,39 +188,52 @@ fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (FuSynapticsRmiPs2Device *self,
 }
 
 static gboolean
-WriteRMIRegister (FuSynapticsRmiPs2Device *self,
-				 guint8 addr,
-				 const guint8 *buf,
-				 guint8 len,
-				 guint timeout,
-				 GError **error)
+fu_synaptics_rmi_ps2_device_write_rmi_register (FuSynapticsRmiPs2Device *self,
+						guint8 addr,
+						const guint8 *buf,
+						guint8 buflen,
+						guint timeout,
+						GError **error)
 {
-
 	if (!self->inRMIBackdoor &&
 	    !fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
-
-	if (!WriteByte (self, edpAuxSetScaling2To1, timeout, error)) {
+	if (!fu_synaptics_rmi_ps2_device_write_byte (self,
+						     edpAuxSetScaling2To1,
+						     timeout,
+						     error)) {
 		g_prefix_error (error, "failed to edpAuxSetScaling2To1: ");
 		return FALSE;
 	}
-	if (!WriteByte (self, edpAuxSetSampleRate, timeout, error)) {
+	if (!fu_synaptics_rmi_ps2_device_write_byte (self,
+						     edpAuxSetSampleRate,
+						     timeout,
+						     error)) {
 		g_prefix_error (error, "failed to edpAuxSetSampleRate: ");
 		return FALSE;
 	}
-	if (!WriteByte (self, addr, timeout, error)) {
+	if (!fu_synaptics_rmi_ps2_device_write_byte (self,
+						     addr,
+						     timeout,
+						     error)) {
 		g_prefix_error (error, "failed to write address: ");
 		return FALSE;
 	}
-	for (guint8 numBytes = 0; numBytes < len; numBytes++) {
-		if (!WriteByte (self, edpAuxSetSampleRate, timeout, error)) {
-			g_prefix_error (error, "failed to WriteByte: ");
+	for (guint8 i = 0; i < buflen; i++) {
+		if (!fu_synaptics_rmi_ps2_device_write_byte (self,
+							     edpAuxSetSampleRate,
+							     timeout,
+							     error)) {
+			g_prefix_error (error, "failed to set byte %u: ", i);
 			return FALSE;
 		}
-		if (!WriteByte(self, *(buf + numBytes), timeout, error)) {
-			g_prefix_error (error, "failed to WriteByte: ");
+		if (!fu_synaptics_rmi_ps2_device_write_byte (self,
+							     buf[i],
+							     timeout,
+							     error)) {
+			g_prefix_error (error, "failed to write byte %u: ", i);
 			return FALSE;
 		}
 	}
@@ -222,10 +244,10 @@ WriteRMIRegister (FuSynapticsRmiPs2Device *self,
 }
 
 static gboolean
-ReadRMIRegister (FuSynapticsRmiPs2Device *self,
-				guint8 addr,
-				guint8 *buf,
-				GError **error)
+fu_synaptics_rmi_ps2_device_read_rmi_register (FuSynapticsRmiPs2Device *self,
+					       guint8 addr,
+					       guint8 *buf,
+					       GError **error)
 {
 	guint32 response = 0;
 
@@ -238,22 +260,22 @@ ReadRMIRegister (FuSynapticsRmiPs2Device *self,
 		return FALSE;
 	}
 
-	g_debug ("ReadRMIRegister: register address = 0x%x", addr);
+	g_debug ("fu_synaptics_rmi_ps2_device_read_rmi_register: register address = 0x%x", addr);
 	if (!self->inRMIBackdoor &&
 	    !fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
-	if (!WriteByte (self, edpAuxSetScaling2To1, 0, error) ||
-	    !WriteByte (self, edpAuxSetSampleRate, 0, error) ||
-	    !WriteByte (self, addr, 0, error) ||
-	    !WriteByte (self, edpAuxStatusRequest, 0, error)) {
+	if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetScaling2To1, 0, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetSampleRate, 0, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, addr, 0, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxStatusRequest, 0, error)) {
 		g_prefix_error (error, "failed to write command in Read RMI register: ");
 		return FALSE;
 	}
 	for (guint i = 0; i < 3; i++) {
 		guint8 tmp = 0;
-		if (!ReadByte (self, &tmp, 0, error)) {
+		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 0, error)) {
 			g_prefix_error (error, "failed to read byte %u: ", i);
 			return FALSE;
 		}
@@ -271,57 +293,51 @@ ReadRMIRegister (FuSynapticsRmiPs2Device *self,
 	return TRUE;
 }
 
-static gboolean
-ReadRMIPacketRegister (FuSynapticsRmiPs2Device *self,
-					  guint8 addr,
-					  guint8 *buf,
-					  guint len,
-					  GError **error)
+static GByteArray *
+fu_synaptics_rmi_ps2_device_read_rmi_packet_register (FuSynapticsRmiPs2Device *self,
+						      guint8 addr,
+						      guint req_sz,
+						      GError **error)
 {
-	/* maybe return val if fail? */
-	if (buf == NULL) {
-		g_set_error_literal (error,
-				     G_IO_ERROR,
-				     G_IO_ERROR_FAILED,
-				     "no buffer set!");
-		return FALSE;
-	}
+	g_autoptr(GByteArray) buf = g_byte_array_new ();
 
-	g_debug ("ReadRMIPacketRegister: register address = 0x%x", addr);
+	g_debug ("register address = 0x%x", addr);
 	if (!self->inRMIBackdoor &&
 	    !fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
-		return FALSE;
+		return NULL;
 	}
-	if (!WriteByte (self, edpAuxSetScaling2To1, 0, error) ||
-	    !WriteByte (self, edpAuxSetSampleRate, 0, error) ||
-	    !WriteByte (self, addr, 0, error) ||
-	    !WriteByte (self, edpAuxStatusRequest, 0, error)) {
+	if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetScaling2To1, 0, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetSampleRate, 0, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, addr, 0, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxStatusRequest, 0, error)) {
 		g_prefix_error (error, "failed to write command in Read RMI Packet Register: ");
-		return FALSE;
+		return NULL;
 	}
-	for (guint i = 0; i < len; ++i) {
+	for (guint i = 0; i < req_sz; ++i) {
 		guint8 tmp = 0;
-		if (!ReadByte (self, &tmp, 0, error)) {
+		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 0, error)) {
 			g_prefix_error (error, "failed to read byte %u: ", i);
-			return FALSE;
+			return NULL;
 		}
-		*(buf + i) = tmp;
+		fu_byte_array_append_uint8 (buf, tmp);
 	}
 
 	g_usleep (1000 * 20);
-	g_debug ("Finished Read RMI Packet Register");
-	return TRUE;
+	g_debug ("finished Read RMI Packet Register");
+	return g_steal_pointer (&buf);
 }
 
 static gboolean 
-SetRMIPage (FuSynapticsRmiPs2Device *self, guint page, GError **error)
+fu_synaptics_rmi_ps2_device_set_rmi_page (FuSynapticsRmiPs2Device *self,
+					  guint page,
+					  GError **error)
 {
 	guint8 buf = (guint8) page;
 	if (self->currentPage == page)
 		return TRUE;
 
-	if (!WriteRMIRegister (self, 0xFF, &buf, 1, 20, error)) {
+	if (!fu_synaptics_rmi_ps2_device_write_rmi_register (self, 0xFF, &buf, 1, 20, error)) {
 		g_prefix_error (error, "failed to write page %u: ", page);
 		return FALSE;
 	}
@@ -330,58 +346,81 @@ SetRMIPage (FuSynapticsRmiPs2Device *self, guint page, GError **error)
 	return TRUE;
 }
 
-static gboolean
-Read (FuSynapticsRmiPs2Device *self, 
-	  guint8 addr, 
-	  guint8 *buf, 
-	  guint8 len, 
-	  gboolean isPacketRegister, 
-	  GError **error)
+static GByteArray *
+fu_synaptics_rmi_ps2_device_read (FuSynapticsRmiDevice *rmi_device,
+				  guint16 addr,
+				  gsize req_sz,
+				  GError **error)
 {
-	if (!SetRMIPage (self, addr >> 8, error)) {
+	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (rmi_device);
+	g_autoptr(GByteArray) buf = NULL;
+	gboolean isPacketRegister = TRUE; //FIXME?! How do we know?!
+
+	if (!fu_synaptics_rmi_ps2_device_set_rmi_page (self, addr >> 8, error)) {
 		g_prefix_error (error, "failed to set RMI page:");
 		return FALSE;
 	}
-		
 
 	if (isPacketRegister){
-		if (!ReadRMIPacketRegister (self, addr, buf, len, error)) {
-			g_prefix_error (error, "failed packet register read %x:", addr);
+		buf = fu_synaptics_rmi_ps2_device_read_rmi_packet_register (self,
+									    addr,
+									    req_sz,
+									    error);
+		if (buf == NULL) {
+			g_prefix_error (error,
+					"failed packet register read %x: ",
+					addr);
 			return FALSE;
 		}
 	} else {
-		for (guint i = 0; i < len; ++i) {
-			if (!ReadRMIRegister (self, (guint8)((addr & 0x00FF) + i), &buf[i], error)) {
-				g_prefix_error (error, "failed register read %x:", addr);
+		buf = g_byte_array_new ();
+		for (guint i = 0; i < req_sz; i++) {
+			guint8 tmp = 0x0;
+			if (!fu_synaptics_rmi_ps2_device_read_rmi_register (self,
+									    (guint8) ((addr & 0x00FF) + i),
+									    &tmp,
+									    error)) {
+				g_prefix_error (error,
+						"failed register read %x: ",
+						addr);
 				return FALSE;
 			}
+			fu_byte_array_append_uint8 (buf, tmp);
 		}
 	}
 	if (g_getenv ("FWUPD_SYNAPTICS_RMI_VERBOSE") != NULL) {
-		fu_common_dump_full (G_LOG_DOMAIN, "PS2DeviceRead", buf, len,
+		fu_common_dump_full (G_LOG_DOMAIN, "PS2DeviceRead",
+				     buf->data, buf->len,
 				     80, FU_DUMP_FLAGS_NONE);
 	}
-	return TRUE;
+	return g_steal_pointer (&buf);
 }
 
 static gboolean
-Write (FuSynapticsRmiPs2Device *self, 
-	   guint8 addr, 
-	   const guint8 *data, 
-	   guint8 len, 
-	   guint32 timeout, 
-	   GError **error)
+fu_synaptics_rmi_ps2_device_write (FuSynapticsRmiDevice *rmi_device,
+				   guint16 addr,
+				   GByteArray *req,
+				   GError **error)
 {
-	if (!SetRMIPage (self, addr >> 8, error)) {
-		g_prefix_error (error, "failed to set RMI page:");
+	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (rmi_device);
+	guint32 timeout = 999; //FIXME
+	if (!fu_synaptics_rmi_ps2_device_set_rmi_page (self,
+						       addr >> 8,
+						       error)) {
+		g_prefix_error (error, "failed to set RMI page: ");
 		return FALSE;
 	}
-	
-	if (!WriteRMIRegister (self, (addr & 0x00FF), data, len, timeout, error)) {
-		g_prefix_error (error, "failed to write register %x:", addr);
+	if (!fu_synaptics_rmi_ps2_device_write_rmi_register (self,
+							     addr & 0x00FF,
+							     req->data,
+							     req->len,
+							     timeout,
+							     error)) {
+		g_prefix_error (error,
+				"failed to write register %x: ",
+				addr);
 		return FALSE;
 	}
-
 	return TRUE;
 }
 
@@ -430,19 +469,19 @@ fu_synaptics_rmi_ps2_device_open (FuUdevDevice *device, GError **error)
 		/* clear out any data in the serio_raw queue */
 		for(guint i = 0; i < 0xffff; i++) {
 			guint8 tmp = 0;
-			if (!ReadByte (self, &tmp, 20, NULL))
+			if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 20, NULL))
 				break;
 		}
 
 		/* send reset -- may take 300-500ms */
-		if (!WriteByte (self, edpAuxReset, 600, error)) {
+		if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxReset, 600, error)) {
 			g_prefix_error (error, "failed to reset: ");
 			return FALSE;
 		}
 
 		/* read the 0xAA 0x00 announcing the touchpad is ready */
-		if (!ReadByte(self, &buf[0], 500, error) ||
-		    !ReadByte(self, &buf[1], 500, error)) {
+		if (!fu_synaptics_rmi_ps2_device_read_byte(self, &buf[0], 500, error) ||
+		    !fu_synaptics_rmi_ps2_device_read_byte(self, &buf[1], 500, error)) {
 			g_prefix_error (error, "failed to read 0xAA00: ");
 			return FALSE;
 		}
@@ -454,7 +493,7 @@ fu_synaptics_rmi_ps2_device_open (FuUdevDevice *device, GError **error)
 		}
 
 		/* disable the device so that it stops reporting finger data */
-		if (!WriteByte (self, edpAuxDisable, 50, error)) {
+		if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxDisable, 50, error)) {
 			g_prefix_error (error, "failed to disable stream mode: ");
 			return FALSE;
 		}
@@ -471,22 +510,6 @@ fu_synaptics_rmi_ps2_device_close (FuUdevDevice *device, GError **error)
 	fu_udev_device_set_fd (device, -1);
 	g_clear_object (&self->io_channel);
 	return TRUE;
-}
-
-static FuFirmware *
-fu_synaptics_rmi_ps2_device_prepare_firmware (FuDevice *device,
-					      GBytes *fw,
-					      FwupdInstallFlags flags,
-					      GError **error)
-{
-//	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (device);
-	g_autoptr(FuFirmware) firmware = fu_firmware_new ();
-
-	if (!fu_firmware_parse (firmware, fw, flags, error))
-		return NULL;
-
-	/* success */
-	return g_steal_pointer (&firmware);
 }
 
 static gboolean
@@ -579,16 +602,18 @@ fu_synaptics_rmi_ps2_device_class_init (FuSynapticsRmiPs2DeviceClass *klass)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (klass);
 	FuDeviceClass *klass_device = FU_DEVICE_CLASS (klass);
-	FuUdevDeviceClass *klass_udev_device = FU_UDEV_DEVICE_CLASS (klass);
+	FuUdevDeviceClass *klass_udev = FU_UDEV_DEVICE_CLASS (klass);
+	FuSynapticsRmiDeviceClass *klass_rmi = FU_SYNAPTICS_RMI_DEVICE_CLASS (klass);
 	object_class->finalize = fu_synaptics_rmi_ps2_device_finalize;
 	klass_device->attach = fu_synaptics_rmi_ps2_device_attach;
 	klass_device->detach = fu_synaptics_rmi_ps2_device_detach;
 	klass_device->setup = fu_synaptics_rmi_ps2_device_setup;
 	klass_device->reload = fu_synaptics_rmi_ps2_device_setup;
 	klass_device->write_firmware = fu_synaptics_rmi_ps2_device_write_firmware;
-	klass_device->prepare_firmware = fu_synaptics_rmi_ps2_device_prepare_firmware;
-	klass_udev_device->to_string = fu_synaptics_rmi_ps2_device_to_string;
-	klass_udev_device->probe = fu_synaptics_rmi_ps2_device_probe;
-	klass_udev_device->open = fu_synaptics_rmi_ps2_device_open;
-	klass_udev_device->close = fu_synaptics_rmi_ps2_device_close;
+	klass_udev->to_string = fu_synaptics_rmi_ps2_device_to_string;
+	klass_udev->probe = fu_synaptics_rmi_ps2_device_probe;
+	klass_udev->open = fu_synaptics_rmi_ps2_device_open;
+	klass_udev->close = fu_synaptics_rmi_ps2_device_close;
+	klass_rmi->read = fu_synaptics_rmi_ps2_device_read;
+	klass_rmi->write = fu_synaptics_rmi_ps2_device_write;
 }

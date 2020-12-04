@@ -43,7 +43,10 @@ G_DEFINE_TYPE (FuSynapticsRmiHidDevice, fu_synaptics_rmi_hid_device, FU_TYPE_SYN
 #define HID_RMI4_ATTN_DATA				2
 
 static GByteArray *
-fu_synaptics_rmi_hid_device_read (FuSynapticsRmiDevice *rmi_device, guint16 addr, gsize req_sz, GError **error)
+fu_synaptics_rmi_hid_device_read (FuSynapticsRmiDevice *rmi_device,
+				  guint16 addr,
+				  gsize req_sz,
+				  GError **error)
 {
 	FuSynapticsRmiHidDevice *self = FU_SYNAPTICS_RMI_HID_DEVICE (rmi_device);
 	g_autoptr(GByteArray) buf = g_byte_array_new ();
@@ -148,7 +151,10 @@ fu_synaptics_rmi_hid_device_read (FuSynapticsRmiDevice *rmi_device, guint16 addr
 }
 
 static gboolean
-fu_synaptics_rmi_hid_device_write (FuSynapticsRmiDevice *rmi_device, guint16 addr, GByteArray *req, GError **error)
+fu_synaptics_rmi_hid_device_write (FuSynapticsRmiDevice *rmi_device,
+				   guint16 addr,
+				   GByteArray *req,
+				   GError **error)
 {
 	FuSynapticsRmiHidDevice *self = FU_SYNAPTICS_RMI_HID_DEVICE (rmi_device);
 	guint8 len = 0x0;
@@ -187,7 +193,8 @@ fu_synaptics_rmi_hid_device_write (FuSynapticsRmiDevice *rmi_device, guint16 add
 				     80, FU_DUMP_FLAGS_NONE);
 	}
 
-	return fu_io_channel_write_byte_array (self->io_channel, buf, RMI_DEVICE_DEFAULT_TIMEOUT,
+	return fu_io_channel_write_byte_array (self->io_channel, buf,
+					       RMI_DEVICE_DEFAULT_TIMEOUT,
 					       FU_IO_CHANNEL_FLAG_SINGLE_SHOT |
 					       FU_IO_CHANNEL_FLAG_USE_BLOCKING_IO,
 					       error);
@@ -195,9 +202,9 @@ fu_synaptics_rmi_hid_device_write (FuSynapticsRmiDevice *rmi_device, guint16 add
 
 static gboolean
 fu_synaptics_rmi_hid_device_wait_for_attr (FuSynapticsRmiDevice *rmi_device,
-				       guint8 source_mask,
-				       guint timeout_ms,
-				       GError **error)
+					   guint8 source_mask,
+					   guint timeout_ms,
+					   GError **error)
 {
 	FuSynapticsRmiHidDevice *self = FU_SYNAPTICS_RMI_HID_DEVICE (rmi_device);
 	g_autoptr(GTimer) timer = g_timer_new ();
@@ -257,10 +264,10 @@ typedef enum {
 	HID_RMI4_MODE_NO_PACKED_ATTN_REPORTS		= 2,
 } FuSynapticsRmiHidMode;
 
-static gboolean //FIXME HID
+static gboolean
 fu_synaptics_rmi_hid_device_set_mode (FuSynapticsRmiHidDevice *self,
-				  FuSynapticsRmiHidMode mode,
-				  GError **error)
+				      FuSynapticsRmiHidMode mode,
+				      GError **error)
 {
 	const guint8 data[] = { 0x0f, mode };
 	if (g_getenv ("FWUPD_SYNAPTICS_RMI_VERBOSE") != NULL)
