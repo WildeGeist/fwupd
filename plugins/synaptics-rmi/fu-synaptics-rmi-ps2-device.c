@@ -13,6 +13,7 @@
 struct _FuSynapticsRmiPs2Device {
 	FuUdevDevice		 parent_instance;
 	FuIOChannel		*io_channel;
+	guint8			 currentPage;
 	gboolean		 inRMIBackdoor;
 };
 
@@ -63,7 +64,8 @@ WriteByte (FuSynapticsRmiPs2Device *self, guint8 buf, guint timeout, GError **er
 
 		if (do_write) {
 			if (!fu_io_channel_write_raw (self->io_channel, &buf, 0x1, timeout,
-						      FU_IO_CHANNEL_FLAG_FLUSH_INPUT, error))
+						      FU_IO_CHANNEL_FLAG_FLUSH_INPUT | 
+							  FU_IO_CHANNEL_FLAG_USE_BLOCKING_IO, error))
 				return FALSE;
 		}
 		do_write = FALSE;
@@ -269,7 +271,7 @@ ReadRMIRegister (FuSynapticsRmiPs2Device *self,
 }
 
 static gboolean
-ReadRMIPacketRegister(FuSynapticsRmiPs2Device *self,
+ReadRMIPacketRegister (FuSynapticsRmiPs2Device *self,
 					  guint8 addr,
 					  guint8 *buf,
 					  guint len,
@@ -308,6 +310,75 @@ ReadRMIPacketRegister(FuSynapticsRmiPs2Device *self,
 
 	g_usleep (1000 * 20);
 	g_debug ("Finished Read RMI Packet Register");
+	return TRUE;
+}
+
+static gboolean 
+SetRMIPage (FuSynapticsRmiPs2Device *self, guint page, GError **error)
+{
+    if (self->currentPage == page)
+        return TRUE;
+
+    if (!WriteRMIRegister (self, 0xFF, &page, 1, 20, error)) {
+		g_prefix_error (error, "failed to write page %d: ", page);
+		return FALSE;
+	}
+	self->currentPage = page;
+    return TRUE;
+}
+
+static gboolean
+Read (FuSynapticsRmiPs2Device *self, 
+	  guint8 addr, 
+	  guint8 *buf, 
+	  guint8 len, 
+	  gboolean isPacketRegister, 
+	  GError **error)
+{
+	if (!SetRMIPage (self, addr >> 8, error)) {
+		g_prefix_error (error, "failed to set RMI page:");
+		return FALSE;
+	}
+		
+
+	if (isPacketRegister){
+		if (!ReadRMIPacketRegister (self, addr, buf, len, error)) {
+			g_prefix_error (error, "failed packet register read %x:", addr);
+			return FALSE;
+		}
+	} else {
+		for (guint i = 0; i < len; ++i) {
+			if (!ReadRMIRegister (self, (guint8)((addr & 0x00FF) + i), &buf[i], error)) {
+				g_prefix_error (error, "failed register read %x:", addr);
+				return FALSE;
+			}
+		}
+	}
+	if (g_getenv ("FWUPD_SYNAPTICS_RMI_VERBOSE") != NULL) {
+		fu_common_dump_full (G_LOG_DOMAIN, "PS2DeviceRead", buf, len,
+				     80, FU_DUMP_FLAGS_NONE);
+	}
+	return TRUE;
+}
+
+static gboolean
+Write (FuSynapticsRmiPs2Device *self, 
+	   guint8 addr, 
+	   const guint8 *data, 
+	   guint8 len, 
+	   guint32 timeout, 
+	   GError **error)
+{
+	if (!SetRMIPage (self, addr >> 8, error)) {
+		g_prefix_error (error, "failed to set RMI page:");
+		return FALSE;
+	}
+	
+	if (!WriteRMIRegister (self, (addr & 0x00FF), data, len, timeout, error)) {
+		g_prefix_error (error, "failed to write register %x:", addr);
+		return FALSE;
+	}
+
 	return TRUE;
 }
 
