@@ -254,9 +254,6 @@ fu_synaptics_rmi_v5_device_query_status (FuSynapticsRmiDevice *self, GError **er
 		g_prefix_error (error, "failed to read the f01 data base: ");
 		return FALSE;
 	}
-	//FIXME: we only want this logic for HID...
-	if (g_strcmp0 (fu_device_get_name (FU_DEVICE (self)), "TouchStyk") == 0)
-		return TRUE;
 	if (f01_db->data[0] & 0x40) {
 		fu_device_add_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_IS_BOOTLOADER);
 	} else {

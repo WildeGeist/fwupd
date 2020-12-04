@@ -259,6 +259,13 @@ fu_synaptics_rmi_device_set_product_id (FuSynapticsRmiDevice *self, const gchar 
 	}
 }
 
+static gboolean
+fu_synaptics_rmi_device_query_status (FuSynapticsRmiDevice *self, GError **error)
+{
+	FuSynapticsRmiDeviceClass *klass_rmi = FU_SYNAPTICS_RMI_DEVICE_GET_CLASS (self);
+	return klass_rmi->query_status (self, error);
+}
+
 gboolean
 fu_synaptics_rmi_device_setup (FuDevice *device, GError **error)
 {
@@ -370,15 +377,12 @@ fu_synaptics_rmi_device_setup (FuDevice *device, GError **error)
 	/* set up vfuncs for each bootloader protocol version */
 	if (priv->f34->function_version == 0x0) {
 		klass_rmi->setup = fu_synaptics_rmi_v5_device_setup;
-		klass_rmi->query_status = fu_synaptics_rmi_v5_device_query_status;
 		klass_device->write_firmware = fu_synaptics_rmi_v5_device_write_firmware;
 	} else if (priv->f34->function_version == 0x1) {
 		klass_rmi->setup = fu_synaptics_rmi_v6_device_setup;
-		klass_rmi->query_status = fu_synaptics_rmi_v5_device_query_status;
 		klass_device->write_firmware = fu_synaptics_rmi_v5_device_write_firmware;
 	} else if (priv->f34->function_version == 0x2) {
 		klass_rmi->setup = fu_synaptics_rmi_v7_device_setup;
-		klass_rmi->query_status = fu_synaptics_rmi_v7_device_query_status;
 		klass_device->write_firmware = fu_synaptics_rmi_v7_device_write_firmware;
 	} else {
 		g_set_error (error,
@@ -394,7 +398,7 @@ fu_synaptics_rmi_device_setup (FuDevice *device, GError **error)
 		g_prefix_error (error, "failed to read f34 queries: ");
 		return FALSE;
 	}
-	if (!klass_rmi->query_status (self, error)) {
+	if (!fu_synaptics_rmi_device_query_status (self, error)) {
 		g_prefix_error (error, "failed to read bootloader status: ");
 		return FALSE;
 	}

@@ -322,6 +322,14 @@ fu_synaptics_rmi_ps2_device_read_rmi_packet_register (FuSynapticsRmiPs2Device *s
 	return g_steal_pointer (&buf);
 }
 
+static gboolean
+fu_synaptics_rmi_ps2_device_query_status (FuSynapticsRmiDevice *rmi_device,
+					  GError **error)
+{
+	/* this doesn't work in PS/2 mode */
+	return TRUE;
+}
+
 static gboolean 
 fu_synaptics_rmi_ps2_device_set_page (FuSynapticsRmiDevice *rmi_device,
 				      guint8 page,
@@ -616,4 +624,5 @@ fu_synaptics_rmi_ps2_device_class_init (FuSynapticsRmiPs2DeviceClass *klass)
 	klass_rmi->read = fu_synaptics_rmi_ps2_device_read;
 	klass_rmi->write = fu_synaptics_rmi_ps2_device_write;
 	klass_rmi->set_page = fu_synaptics_rmi_ps2_device_set_page;
+	klass_rmi->query_status = fu_synaptics_rmi_ps2_device_query_status;
 }

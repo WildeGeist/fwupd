@@ -524,6 +524,29 @@ fu_synaptics_rmi_hid_device_probe (FuUdevDevice *device, GError **error)
 	return fu_udev_device_set_physical_id (device, "hid", error);
 }
 
+static gboolean
+fu_synaptics_rmi_hid_device_query_status (FuSynapticsRmiDevice *rmi_device,
+					  GError **error)
+{
+	FuSynapticsRmiFunction *f34;
+	f34 = fu_synaptics_rmi_device_get_function (rmi_device, 0x34, error);
+	if (f34 == NULL)
+		return FALSE;
+	if (f34->function_version == 0x0 ||
+	    f34->function_version == 0x1) {
+		return fu_synaptics_rmi_v5_device_query_status (rmi_device, error);
+	}
+	if (f34->function_version == 0x2) {
+		return fu_synaptics_rmi_v7_device_query_status (rmi_device, error);
+	}
+	g_set_error (error,
+		     FWUPD_ERROR,
+		     FWUPD_ERROR_NOT_SUPPORTED,
+		     "f34 function version 0x%02x unsupported",
+		     f34->function_version);
+	return FALSE;
+}
+
 static void
 fu_synaptics_rmi_hid_device_init (FuSynapticsRmiHidDevice *self)
 {
@@ -546,4 +569,5 @@ fu_synaptics_rmi_hid_device_class_init (FuSynapticsRmiHidDeviceClass *klass)
 	klass_rmi->read = fu_synaptics_rmi_hid_device_read;
 	klass_rmi->wait_for_attr = fu_synaptics_rmi_hid_device_wait_for_attr;
 	klass_rmi->set_page = fu_synaptics_rmi_hid_device_set_page;
+	klass_rmi->query_status = fu_synaptics_rmi_hid_device_query_status;
 }
