@@ -31,7 +31,7 @@ fu_synaptics_rmi_ps2_device_read_ack (FuSynapticsRmiPs2Device *self,
 					     FU_IO_CHANNEL_FLAG_NONE,
 					     &error_local)) {
 			if (g_error_matches (error_local, G_IO_ERROR, G_IO_ERROR_TIMED_OUT)) {
-				g_debug ("read timed out: %u", i);
+				g_warning ("read timed out: %u", i);
 				g_usleep (30);
 				continue;
 			}
@@ -66,49 +66,50 @@ fu_synaptics_rmi_ps2_device_write_byte (FuSynapticsRmiPs2Device *self,
 					GError **error)
 {
 	gboolean do_write = TRUE;
-
 	g_return_val_if_fail (timeout > 0, FALSE);
-
-	for (guint i = 0; i < 3; i++) {
+	for (guint i = 0; ; i++) {
 		guint8 res = 0;
 		g_autoptr(GError) error_local = NULL;
-
 		if (do_write) {
-			if (!fu_io_channel_write_raw (self->io_channel, &buf, 0x1, timeout,
+			if (!fu_io_channel_write_raw (self->io_channel,
+						      &buf, sizeof(buf),
+						      timeout,
 						      FU_IO_CHANNEL_FLAG_FLUSH_INPUT | 
 						      FU_IO_CHANNEL_FLAG_USE_BLOCKING_IO,
 						      error))
 				return FALSE;
 		}
 		do_write = FALSE;
-		g_debug ("wrote byte: 0x%x, attempt to read acknowledge...", buf);
 
+		/* attempt to read acknowledge... */
 		if (!fu_synaptics_rmi_ps2_device_read_ack (self, &res, &error_local)) {
-			g_debug ("read Failed: %s", error_local->message);
+			if (i > 3) {
+				g_propagate_prefixed_error (error,
+							    g_steal_pointer (&error_local),
+							    "read ack failed: ");
+				return FALSE;
+			}
+			g_warning ("read ack failed: %s, retrying", error_local->message);
 			continue;
 		}
-		if (res == edpsAcknowledge) {
-			g_debug ("write acknowledged");
-			return TRUE;
-		}
+		if (res == edpsAcknowledge)
+			break;
 		if (res == edpsResend) {
-			g_debug ("resend");
 			do_write = TRUE;
-			g_debug ("resend, sleep 1 sec");
-			g_usleep (1000*1000);
+			g_usleep (G_USEC_PER_SEC);
 			continue;
 		}
 		if (res == edpsError) {
-			g_debug ("fail received error from touchpad");
 			do_write = TRUE;
 			g_usleep (1000 * 10);
 			continue;
 		}
-		g_debug ("other response : 0x%x, sleep 1 sec", res);
+		g_debug ("other response : 0x%x", res);
 		g_usleep (1000 * 10);
 	}
-	g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "failed");
-	return FALSE;
+
+	/* success */
+	return TRUE;
 }
 
 static gboolean
@@ -117,23 +118,21 @@ fu_synaptics_rmi_ps2_device_set_resolution_sequence (FuSynapticsRmiPs2Device *se
 						     gboolean send_e6s,
 						     GError **error)
 {
-	g_debug ("Set Resolution Sequence: arg = 0x%x", arg);
-
 	/* send set scaling twice if send_e6s */
 	for (gint i = send_e6s ? 2 : 1; i > 0; --i) {
 		if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetScaling1To1, 50, error))
 			return FALSE;
 	}
-
 	for (gint i = 3; i >= 0; --i) {
 		guint8 ucTwoBitArg = (arg >> (i * 2)) & 0x3;
 		if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetResolution, 50, error)) {
 			return FALSE;
 		}
-		g_debug ("Send ucTwoBitArg = 0x%x", ucTwoBitArg);
 		if (!fu_synaptics_rmi_ps2_device_write_byte (self, ucTwoBitArg, 50, error))
 			return FALSE;
 	}
+
+	/* success */
 	return TRUE;
 }
 
@@ -145,7 +144,7 @@ fu_synaptics_rmi_ps2_device_sample_rate_sequence (FuSynapticsRmiPs2Device *self,
 						  GError **error)
 {
 	/* allow 3 retries */
-	for (guint i = 0; i < 3; i++) {
+	for (guint i = 0; ; i++) {
 		g_autoptr(GError) error_local = NULL;
 		if (i > 0) {
 			/* always send two E6s when retrying */
@@ -154,14 +153,18 @@ fu_synaptics_rmi_ps2_device_sample_rate_sequence (FuSynapticsRmiPs2Device *self,
 		if (!fu_synaptics_rmi_ps2_device_set_resolution_sequence (self, arg, send_e6s, &error_local) ||
 		    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetSampleRate, 50, &error_local) ||
 		    !fu_synaptics_rmi_ps2_device_write_byte (self, param, 50, &error_local)) {
+			if (i > 3) {
+				g_propagate_error (error,
+						   g_steal_pointer (&error_local));
+				return FALSE;
+			}
 			g_warning ("failed, will retry: %s", error_local->message);
 			continue;
 		}
-		return TRUE;
+		break;
 	}
-
-	g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "too many tries");
-	return FALSE;
+	/* success */
+	return TRUE;
 }
 
 static gboolean
@@ -171,8 +174,6 @@ fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (FuSynapticsRmiPs2Device *self,
 	if (self->in_backdoor)
 		return TRUE;
 
-	g_debug ("Enable RMI backdoor");
-
 	/* disable stream */
 	if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxDisable, 50, error)) {
 		g_prefix_error (error, "failed to disable stream mode: ");
@@ -180,6 +181,7 @@ fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (FuSynapticsRmiPs2Device *self,
 	}
 
 	/* enable RMI mode */
+	g_debug ("enabling RMI backdoor");
 	if (!fu_synaptics_rmi_ps2_device_sample_rate_sequence (self,
 							       essrSetModeByte2,
 							       edpAuxFullRMIBackDoor,
@@ -189,6 +191,7 @@ fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (FuSynapticsRmiPs2Device *self,
 		return FALSE;
 	}
 
+	/* success */
 	return TRUE;
 }
 
@@ -258,7 +261,6 @@ fu_synaptics_rmi_ps2_device_read_rmi_register (FuSynapticsRmiPs2Device *self,
 
 	g_return_val_if_fail (buf != NULL, FALSE);
 
-	g_debug ("register address = 0x%x", addr);
 	if (!fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
@@ -282,11 +284,9 @@ fu_synaptics_rmi_ps2_device_read_rmi_register (FuSynapticsRmiPs2Device *self,
 	/* we only care about the least significant byte since that
 	 * is what contains the value of the register at the address addr */
 	*buf = (guint8) response;
-	g_debug ("RMI value == 0x%x", *buf);
 
 	/* success */
 	g_usleep (1000 * 20);
-	g_debug ("Finished Read RMI Register");
 	return TRUE;
 }
 
@@ -298,7 +298,6 @@ fu_synaptics_rmi_ps2_device_read_rmi_packet_register (FuSynapticsRmiPs2Device *s
 {
 	g_autoptr(GByteArray) buf = g_byte_array_new ();
 
-	g_debug ("register address = 0x%x", addr);
 	if (!fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return NULL;
@@ -320,7 +319,6 @@ fu_synaptics_rmi_ps2_device_read_rmi_packet_register (FuSynapticsRmiPs2Device *s
 	}
 
 	g_usleep (1000 * 20);
-	g_debug ("finished Read RMI Packet Register");
 	return g_steal_pointer (&buf);
 }
 
