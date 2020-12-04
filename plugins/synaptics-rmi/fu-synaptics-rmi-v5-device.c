@@ -85,7 +85,6 @@ fu_synaptics_rmi_v5_device_write_firmware (FuDevice *device,
 					   FwupdInstallFlags flags,
 					   GError **error)
 {
-
 	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
 	FuSynapticsRmiFlash *flash = fu_synaptics_rmi_device_get_flash (self);
 	FuSynapticsRmiFunction *f34;
