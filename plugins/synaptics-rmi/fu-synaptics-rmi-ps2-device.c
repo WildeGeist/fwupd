@@ -7,8 +7,9 @@
 
 #include "config.h"
 
-#include "fu-synaptics-rmi-ps2-device.h"
 #include "fu-io-channel.h"
+
+#include "fu-synaptics-rmi-ps2-device.h"
 
 struct _FuSynapticsRmiPs2Device {
 	FuSynapticsRmiDevice	 parent_instance;
@@ -316,15 +317,17 @@ ReadRMIPacketRegister (FuSynapticsRmiPs2Device *self,
 static gboolean 
 SetRMIPage (FuSynapticsRmiPs2Device *self, guint page, GError **error)
 {
-    if (self->currentPage == page)
-        return TRUE;
+	guint8 buf = (guint8) page;
+	if (self->currentPage == page)
+		return TRUE;
 
-    if (!WriteRMIRegister (self, 0xFF, &page, 1, 20, error)) {
-		g_prefix_error (error, "failed to write page %d: ", page);
+	if (!WriteRMIRegister (self, 0xFF, &buf, 1, 20, error)) {
+		g_prefix_error (error, "failed to write page %u: ", page);
 		return FALSE;
 	}
+
 	self->currentPage = page;
-    return TRUE;
+	return TRUE;
 }
 
 static gboolean
@@ -556,8 +559,6 @@ static void
 fu_synaptics_rmi_ps2_device_init (FuSynapticsRmiPs2Device *self)
 {
 	fu_device_add_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_INTERNAL);
-	fu_device_add_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_UPDATABLE);
-	fu_device_set_protocol (FU_DEVICE (self), "com.synaptics.rmi");
 	fu_device_set_name (FU_DEVICE (self), "TouchStyk");
 	fu_device_set_vendor (FU_DEVICE (self), "Synaptics");
 	fu_device_set_vendor_id (FU_DEVICE (self), "HIDRAW:0x06CB");

@@ -19,6 +19,12 @@ struct _FuSynapticsRmiDeviceClass
 								 GError			**error);
 	gboolean		 (*query_status)		(FuSynapticsRmiDevice	*self,
 								 GError			**error);
+	gboolean		 (*write)			(FuSynapticsRmiDevice	*self, guint16 addr, GByteArray *req, GError **error);
+	GByteArray		*(*read)			(FuSynapticsRmiDevice	*self, guint16 addr, gsize req_sz, GError **error);
+	gboolean		 (*wait_for_attr)		(FuSynapticsRmiDevice	*self,
+								 guint8 source_mask,
+								 guint timeout_ms,
+								GError **error);
 };
 
 typedef struct {
