@@ -19,12 +19,18 @@ struct _FuSynapticsRmiDeviceClass
 								 GError			**error);
 	gboolean		 (*query_status)		(FuSynapticsRmiDevice	*self,
 								 GError			**error);
-	gboolean		 (*write)			(FuSynapticsRmiDevice	*self, guint16 addr, GByteArray *req, GError **error);
-	GByteArray		*(*read)			(FuSynapticsRmiDevice	*self, guint16 addr, gsize req_sz, GError **error);
+	gboolean		 (*write)			(FuSynapticsRmiDevice	*self,
+								 guint16		 addr,
+								 GByteArray		*req,
+								 GError			**error);
+	GByteArray		*(*read)			(FuSynapticsRmiDevice	*self,
+								 guint16		 addr,
+								 gsize			 req_sz,
+								 GError			**error);
 	gboolean		 (*wait_for_attr)		(FuSynapticsRmiDevice	*self,
-								 guint8 source_mask,
-								 guint timeout_ms,
-								GError **error);
+								 guint8			 source_mask,
+								 guint			 timeout_ms,
+								 GError			**error);
 };
 
 typedef struct {
@@ -75,8 +81,6 @@ gboolean		 fu_synaptics_rmi_device_disable_sleep	(FuSynapticsRmiDevice	*self,
 FuSynapticsRmiFlash	*fu_synaptics_rmi_device_get_flash	(FuSynapticsRmiDevice	*self);
 FuSynapticsRmiFunction	*fu_synaptics_rmi_device_get_function	(FuSynapticsRmiDevice	*self,
 								 guint8			 function_number,
-								 GError			**error);
-gboolean		 fu_synaptics_rmi_device_rebind_driver	(FuSynapticsRmiDevice	*self,
 								 GError			**error);
 gboolean		 fu_synaptics_rmi_device_poll_wait	(FuSynapticsRmiDevice	*self,
 								 GError			**error);

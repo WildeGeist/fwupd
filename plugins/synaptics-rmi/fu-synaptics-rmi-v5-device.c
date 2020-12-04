@@ -10,55 +10,16 @@
 
 #include "fu-chunk.h"
 #include "fu-common.h"
+#include "fu-synaptics-rmi-device.h"
 #include "fu-synaptics-rmi-v5-device.h"
 
 #include "fwupd-error.h"
-
-#define RMI_F34_WRITE_FW_BLOCK				0x02
-#define RMI_F34_ERASE_ALL				0x03
-#define RMI_F34_WRITE_LOCKDOWN_BLOCK			0x04
-#define RMI_F34_WRITE_CONFIG_BLOCK			0x06
-#define RMI_F34_ENABLE_FLASH_PROG			0x0f
 
 #define RMI_F34_BLOCK_SIZE_OFFSET			1
 #define RMI_F34_FW_BLOCKS_OFFSET			3
 #define RMI_F34_CONFIG_BLOCKS_OFFSET			5
 
-#define RMI_F34_ERASE_WAIT_MS				(5 * 1000)	/* ms */
-
-gboolean
-fu_synaptics_rmi_v5_device_detach (FuDevice *device, GError **error)
-{
-	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
-	FuSynapticsRmiFlash *flash = fu_synaptics_rmi_device_get_flash (self);
-	g_autoptr(GByteArray) enable_req = g_byte_array_new ();
-
-	/* sanity check */
-	if (!fu_device_has_flag (device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
-		g_debug ("already in runtime mode, skipping");
-		return TRUE;
-	}
-
-	/* disable interrupts */
-	if (!fu_synaptics_rmi_device_disable_irqs (self, error))
-		return FALSE;
-
-	/* unlock bootloader and rebind kernel driver */
-	if (!fu_synaptics_rmi_device_write_bootloader_id (self, error))
-		return FALSE;
-	fu_byte_array_append_uint8 (enable_req, RMI_F34_ENABLE_FLASH_PROG);
-	if (!fu_synaptics_rmi_device_write (self,
-					    flash->status_addr,
-					    enable_req,
-					    error)) {
-		g_prefix_error (error, "failed to enable programming: ");
-		return FALSE;
-	}
-
-	fu_device_set_status (device, FWUPD_STATUS_DEVICE_RESTART);
-	g_usleep (1000 * RMI_F34_ENABLE_WAIT_MS);
-	return fu_synaptics_rmi_device_rebind_driver (self, error);
-}
+#define RMI_V5_FLASH_CMD_ERASE_WAIT_MS			(5 * 1000)	/* ms */
 
 static gboolean
 fu_synaptics_rmi_v5_device_erase_all (FuSynapticsRmiDevice *self, GError **error)
@@ -73,7 +34,7 @@ fu_synaptics_rmi_v5_device_erase_all (FuSynapticsRmiDevice *self, GError **error
 		return FALSE;
 
 	/* all other versions */
-	fu_byte_array_append_uint8 (erase_cmd, RMI_F34_ERASE_ALL);
+	fu_byte_array_append_uint8 (erase_cmd, RMI_V5_FLASH_CMD_ERASE_ALL);
 	if (!fu_synaptics_rmi_device_write (self,
 					    flash->status_addr,
 					    erase_cmd,
@@ -81,9 +42,9 @@ fu_synaptics_rmi_v5_device_erase_all (FuSynapticsRmiDevice *self, GError **error
 		g_prefix_error (error, "failed to erase core config: ");
 		return FALSE;
 	}
-	g_usleep (1000 * RMI_F34_ENABLE_WAIT_MS);
+	g_usleep (1000 * RMI_V5_FLASH_CMD_ERASE_WAIT_MS);
 	if (!fu_synaptics_rmi_device_wait_for_idle (self,
-						    RMI_F34_ERASE_WAIT_MS,
+						    RMI_V5_FLASH_CMD_ERASE_WAIT_MS,
 						    RMI_DEVICE_WAIT_FOR_IDLE_FLAG_REFRESH_F34,
 						    error)) {
 		g_prefix_error (error, "failed to wait for idle for erase: ");
@@ -208,7 +169,7 @@ fu_synaptics_rmi_v5_device_write_firmware (FuDevice *device,
 	for (guint i = 0; i < chunks_bin->len; i++) {
 		FuChunk *chk = g_ptr_array_index (chunks_bin, i);
 		if (!fu_synaptics_rmi_v5_device_write_block (self,
-							     RMI_F34_WRITE_FW_BLOCK,
+							     RMI_V5_FLASH_CMD_WRITE_FW_BLOCK,
 							     address,
 							     chk->data,
 							     chk->data_sz,
@@ -228,7 +189,7 @@ fu_synaptics_rmi_v5_device_write_firmware (FuDevice *device,
 	for (guint i = 0; i < chunks_cfg->len; i++) {
 		FuChunk *chk = g_ptr_array_index (chunks_cfg, i);
 		if (!fu_synaptics_rmi_v5_device_write_block (self,
-							     RMI_F34_WRITE_CONFIG_BLOCK,
+							     RMI_V5_FLASH_CMD_WRITE_CONFIG_BLOCK,
 							     address,
 							     chk->data,
 							     chk->data_sz,

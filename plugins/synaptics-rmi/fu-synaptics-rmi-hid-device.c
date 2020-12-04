@@ -14,6 +14,8 @@
 #include "fu-io-channel.h"
 
 #include "fu-synaptics-rmi-hid-device.h"
+#include "fu-synaptics-rmi-v5-device.h"
+#include "fu-synaptics-rmi-v7-device.h"
 
 struct _FuSynapticsRmiHidDevice {
 	FuSynapticsRmiDevice	 parent_instance;
@@ -315,6 +317,191 @@ fu_synaptics_rmi_hid_device_close (FuUdevDevice *device, GError **error)
 }
 
 static gboolean
+fu_synaptics_rmi_device_rebind_driver (FuSynapticsRmiDevice *self, GError **error)
+{
+	GUdevDevice *udev_device = fu_udev_device_get_dev (FU_UDEV_DEVICE (self));
+	const gchar *hid_id;
+	const gchar *driver;
+	const gchar *subsystem;
+	g_autofree gchar *fn_rebind = NULL;
+	g_autofree gchar *fn_unbind = NULL;
+	g_autoptr(GUdevDevice) parent_hid = NULL;
+	g_autoptr(GUdevDevice) parent_i2c = NULL;
+
+	/* get actual HID node */
+	parent_hid = g_udev_device_get_parent_with_subsystem (udev_device, "hid", NULL);
+	if (parent_hid == NULL) {
+		g_set_error (error,
+			     FWUPD_ERROR,
+			     FWUPD_ERROR_INVALID_FILE,
+			     "no HID parent device for %s",
+			     g_udev_device_get_sysfs_path (udev_device));
+		return FALSE;
+	}
+
+	/* find the physical ID to use for the rebind */
+	hid_id = g_udev_device_get_property (parent_hid, "HID_PHYS");
+	if (hid_id == NULL) {
+		g_set_error (error,
+			     FWUPD_ERROR,
+			     FWUPD_ERROR_INVALID_FILE,
+			     "no HID_PHYS in %s",
+			     g_udev_device_get_sysfs_path (parent_hid));
+		return FALSE;
+	}
+	g_debug ("HID_PHYS: %s", hid_id);
+
+	/* build paths */
+	parent_i2c = g_udev_device_get_parent_with_subsystem (udev_device, "i2c", NULL);
+	if (parent_i2c == NULL) {
+		g_set_error (error,
+			     FWUPD_ERROR,
+			     FWUPD_ERROR_INVALID_FILE,
+			     "no I2C parent device for %s",
+			     g_udev_device_get_sysfs_path (udev_device));
+		return FALSE;
+	}
+	driver = g_udev_device_get_driver (parent_i2c);
+	subsystem = g_udev_device_get_subsystem (parent_i2c);
+	fn_rebind = g_build_filename ("/sys/bus/", subsystem, "drivers", driver, "bind", NULL);
+	fn_unbind = g_build_filename ("/sys/bus/", subsystem, "drivers", driver, "unbind", NULL);
+
+	/* unbind hidraw, then bind it again to get a replug */
+	fu_device_add_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_WAIT_FOR_REPLUG);
+	if (!fu_synaptics_rmi_device_writeln (fn_unbind, hid_id, error))
+		return FALSE;
+	if (!fu_synaptics_rmi_device_writeln (fn_rebind, hid_id, error))
+		return FALSE;
+
+	/* success */
+	return TRUE;
+}
+
+static gboolean
+fu_synaptics_rmi_v5_device_detach (FuDevice *device, GError **error)
+{
+	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
+	FuSynapticsRmiFlash *flash = fu_synaptics_rmi_device_get_flash (self);
+	g_autoptr(GByteArray) enable_req = g_byte_array_new ();
+
+	/* sanity check */
+	if (!fu_device_has_flag (device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
+		g_debug ("already in runtime mode, skipping");
+		return TRUE;
+	}
+
+	/* disable interrupts */
+	if (!fu_synaptics_rmi_device_disable_irqs (self, error))
+		return FALSE;
+
+	/* unlock bootloader and rebind kernel driver */
+	if (!fu_synaptics_rmi_device_write_bootloader_id (self, error))
+		return FALSE;
+	fu_byte_array_append_uint8 (enable_req, RMI_V5_FLASH_CMD_ENABLE_FLASH_PROG);
+	if (!fu_synaptics_rmi_device_write (self,
+					    flash->status_addr,
+					    enable_req,
+					    error)) {
+		g_prefix_error (error, "failed to enable programming: ");
+		return FALSE;
+	}
+
+	fu_device_set_status (device, FWUPD_STATUS_DEVICE_RESTART);
+	g_usleep (1000 * RMI_F34_ENABLE_WAIT_MS);
+	return TRUE;
+}
+
+static gboolean
+fu_synaptics_rmi_v7_device_detach (FuDevice *device, GError **error)
+{
+	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
+	g_autoptr(GByteArray) enable_req = g_byte_array_new ();
+	FuSynapticsRmiFlash *flash = fu_synaptics_rmi_device_get_flash (self);
+	FuSynapticsRmiFunction *f34;
+
+	/* f34 */
+	f34 = fu_synaptics_rmi_device_get_function (self, 0x34, error);
+	if (f34 == NULL)
+		return FALSE;
+
+	/* disable interrupts */
+	if (!fu_synaptics_rmi_device_disable_irqs (self, error))
+		return FALSE;
+
+	/* enter BL */
+	fu_byte_array_append_uint8 (enable_req, RMI_V7_PARTITION_ID_BOOTLOADER);
+	fu_byte_array_append_uint32 (enable_req, 0x0, G_LITTLE_ENDIAN);
+	fu_byte_array_append_uint8 (enable_req, RMI_V7_FLASH_CMD_ENTER_BL);
+	fu_byte_array_append_uint8 (enable_req, flash->bootloader_id[0]);
+	fu_byte_array_append_uint8 (enable_req, flash->bootloader_id[1]);
+	if (!fu_synaptics_rmi_device_write (self,
+					    f34->data_base + 1,
+					    enable_req,
+					    error)) {
+		g_prefix_error (error, "failed to enable programming: ");
+		return FALSE;
+	}
+
+	/* wait for idle */
+	if (!fu_synaptics_rmi_device_wait_for_idle (self, RMI_F34_ENABLE_WAIT_MS,
+						    RMI_DEVICE_WAIT_FOR_IDLE_FLAG_NONE,
+						    error))
+		return FALSE;
+	if (!fu_synaptics_rmi_device_poll_wait (self, error))
+		return FALSE;
+	fu_device_set_status (device, FWUPD_STATUS_DEVICE_RESTART);
+	g_usleep (1000 * RMI_F34_ENABLE_WAIT_MS);
+	return TRUE;
+}
+
+static gboolean
+fu_synaptics_rmi_device_detach (FuDevice *device, GError **error)
+{
+	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
+	FuSynapticsRmiFunction *f34;
+
+	f34 = fu_synaptics_rmi_device_get_function (self, 0x34, error);
+	if (f34 == NULL)
+		return FALSE;
+	if (f34->function_version == 0x0 ||
+	    f34->function_version == 0x1) {
+		if (!fu_synaptics_rmi_v5_device_detach (device, error))
+			return FALSE;
+	} else if (f34->function_version == 0x2) {
+		if (!fu_synaptics_rmi_v7_device_detach (device, error))
+			return FALSE;
+	} else {
+		g_set_error (error,
+			     FWUPD_ERROR,
+			     FWUPD_ERROR_NOT_SUPPORTED,
+			     "f34 function version 0x%02x unsupported",
+			     f34->function_version);
+		return FALSE;
+	}
+	return fu_synaptics_rmi_device_rebind_driver (self, error);
+}
+
+static gboolean
+fu_synaptics_rmi_device_attach (FuDevice *device, GError **error)
+{
+	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
+
+	/* sanity check */
+	if (!fu_device_has_flag (device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
+		g_debug ("already in runtime mode, skipping");
+		return TRUE;
+	}
+
+	/* reset device */
+	if (!fu_synaptics_rmi_device_reset (self, error))
+		return FALSE;
+
+	/* rebind to rescan PDT with new firmware running */
+	fu_device_set_status (device, FWUPD_STATUS_DEVICE_RESTART);
+	return fu_synaptics_rmi_device_rebind_driver (self, error);
+}
+
+static gboolean
 fu_synaptics_rmi_hid_device_probe (FuUdevDevice *device, GError **error)
 {
 	return fu_udev_device_set_physical_id (device, "hid", error);
@@ -331,8 +518,11 @@ fu_synaptics_rmi_hid_device_init (FuSynapticsRmiHidDevice *self)
 static void
 fu_synaptics_rmi_hid_device_class_init (FuSynapticsRmiHidDeviceClass *klass)
 {
+	FuDeviceClass *klass_device = FU_DEVICE_CLASS (klass);
 	FuSynapticsRmiDeviceClass *klass_rmi = FU_SYNAPTICS_RMI_DEVICE_CLASS (klass);
 	FuUdevDeviceClass *klass_udev = FU_UDEV_DEVICE_CLASS (klass);
+	klass_device->attach = fu_synaptics_rmi_device_attach;
+	klass_device->detach = fu_synaptics_rmi_device_detach;
 	klass_udev->probe = fu_synaptics_rmi_hid_device_probe;
 	klass_udev->open = fu_synaptics_rmi_hid_device_open;
 	klass_udev->close = fu_synaptics_rmi_hid_device_close;
