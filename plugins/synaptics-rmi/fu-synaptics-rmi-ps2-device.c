@@ -263,10 +263,10 @@ fu_synaptics_rmi_ps2_device_read_rmi_register (FuSynapticsRmiPs2Device *self,
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
-	if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetScaling2To1, 0, error) ||
-	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetSampleRate, 0, error) ||
-	    !fu_synaptics_rmi_ps2_device_write_byte (self, addr, 0, error) ||
-	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxStatusRequest, 0, error)) {
+	if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetScaling2To1, 50, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetSampleRate, 50, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, addr, 50, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxStatusRequest, 50, error)) {
 		g_prefix_error (error, "failed to write command in Read RMI register: ");
 		return FALSE;
 	}
@@ -303,16 +303,16 @@ fu_synaptics_rmi_ps2_device_read_rmi_packet_register (FuSynapticsRmiPs2Device *s
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return NULL;
 	}
-	if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetScaling2To1, 0, error) ||
-	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetSampleRate, 0, error) ||
-	    !fu_synaptics_rmi_ps2_device_write_byte (self, addr, 0, error) ||
-	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxStatusRequest, 0, error)) {
+	if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetScaling2To1, 50, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxSetSampleRate, 50, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, addr, 50, error) ||
+	    !fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxStatusRequest, 50, error)) {
 		g_prefix_error (error, "failed to write command in Read RMI Packet Register: ");
 		return NULL;
 	}
 	for (guint i = 0; i < req_sz; ++i) {
 		guint8 tmp = 0;
-		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 0, error)) {
+		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 50, error)) {
 			g_prefix_error (error, "failed to read byte %u: ", i);
 			return NULL;
 		}
@@ -552,6 +552,9 @@ fu_synaptics_rmi_ps2_device_detach (FuDevice *device, GError **error)
 static gboolean
 fu_synaptics_rmi_ps2_device_setup (FuDevice *device, GError **error)
 {
+	/* we can only scan the PDT in serio_raw mode */
+	if (fu_device_has_flag (device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER))
+		return fu_synaptics_rmi_device_setup (device, error);
 	return TRUE;
 }
 

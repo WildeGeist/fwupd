@@ -259,7 +259,7 @@ fu_synaptics_rmi_device_set_product_id (FuSynapticsRmiDevice *self, const gchar 
 	}
 }
 
-static gboolean
+gboolean
 fu_synaptics_rmi_device_setup (FuDevice *device, GError **error)
 {
 	FuDeviceClass *klass_device = FU_DEVICE_GET_CLASS (device);
