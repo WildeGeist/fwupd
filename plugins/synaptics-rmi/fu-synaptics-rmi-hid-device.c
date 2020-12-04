@@ -502,6 +502,23 @@ fu_synaptics_rmi_device_attach (FuDevice *device, GError **error)
 }
 
 static gboolean
+fu_synaptics_rmi_hid_device_set_page (FuSynapticsRmiDevice *self,
+				      guint8 page,
+				      GError **error)
+{
+	g_autoptr(GByteArray) req = g_byte_array_new ();
+	fu_byte_array_append_uint8 (req, page);
+	if (!fu_synaptics_rmi_device_write (self,
+					    RMI_DEVICE_PAGE_SELECT_REGISTER,
+					    req,
+					    error)) {
+		g_prefix_error (error, "failed to set RMA page 0x%x: ", page);
+		return FALSE;
+	}
+	return TRUE;
+}
+
+static gboolean
 fu_synaptics_rmi_hid_device_probe (FuUdevDevice *device, GError **error)
 {
 	return fu_udev_device_set_physical_id (device, "hid", error);
@@ -529,4 +546,5 @@ fu_synaptics_rmi_hid_device_class_init (FuSynapticsRmiHidDeviceClass *klass)
 	klass_rmi->write = fu_synaptics_rmi_hid_device_write;
 	klass_rmi->read = fu_synaptics_rmi_hid_device_read;
 	klass_rmi->wait_for_attr = fu_synaptics_rmi_hid_device_wait_for_attr;
+	klass_rmi->set_page = fu_synaptics_rmi_hid_device_set_page;
 }

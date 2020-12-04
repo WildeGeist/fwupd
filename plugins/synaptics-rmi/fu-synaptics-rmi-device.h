@@ -31,6 +31,9 @@ struct _FuSynapticsRmiDeviceClass
 								 guint8			 source_mask,
 								 guint			 timeout_ms,
 								 GError			**error);
+	gboolean		 (*set_page)			(FuSynapticsRmiDevice	*self,
+								 guint8			 page,
+								 GError			**error);
 };
 
 typedef struct {
@@ -53,11 +56,16 @@ typedef struct {
 #define RMI_F34_ENABLE_WAIT_MS				300		/* ms */
 #define RMI_F34_IDLE_WAIT_MS				500		/* ms */
 
+#define RMI_DEVICE_PAGE_SELECT_REGISTER			0xff
+
 typedef enum {
 	RMI_DEVICE_WAIT_FOR_IDLE_FLAG_NONE		= 0,
 	RMI_DEVICE_WAIT_FOR_IDLE_FLAG_REFRESH_F34	= (1 << 0),
 } RmiDeviceWaitForIdleFlags;
 
+gboolean		 fu_synaptics_rmi_device_set_page	(FuSynapticsRmiDevice	*self,
+								 guint8			 page,
+								 GError			**error);
 gboolean		 fu_synaptics_rmi_device_write_bootloader_id	(FuSynapticsRmiDevice	*self,
 								 GError			**error);
 gboolean		 fu_synaptics_rmi_device_disable_irqs	(FuSynapticsRmiDevice	*self,

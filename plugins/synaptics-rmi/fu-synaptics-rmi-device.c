@@ -14,7 +14,6 @@
 #include "fu-synaptics-rmi-v6-device.h"
 #include "fu-synaptics-rmi-v7-device.h"
 
-#define RMI_DEVICE_PAGE_SELECT_REGISTER			0xff
 #define RMI_DEVICE_MAX_PAGE				0xff
 #define RMI_DEVICE_PAGE_SIZE				0x100
 #define RMI_DEVICE_PAGE_SCAN_START			0x00e9
@@ -64,6 +63,7 @@ typedef struct
 	GPtrArray		*functions;
 	FuSynapticsRmiFunction	*f01;
 	FuSynapticsRmiFunction	*f34;
+	guint8			 current_page;
 } FuSynapticsRmiDevicePrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (FuSynapticsRmiDevice, fu_synaptics_rmi_device, FU_TYPE_UDEV_DEVICE)
@@ -152,16 +152,16 @@ fu_synaptics_rmi_device_write (FuSynapticsRmiDevice *self,
 	return klass_rmi->write (self, addr, req, error);
 }
 
-static gboolean
-fu_synaptics_rmi_device_set_rma_page (FuSynapticsRmiDevice *self, guint8 page, GError **error)
+gboolean
+fu_synaptics_rmi_device_set_page (FuSynapticsRmiDevice *self, guint8 page, GError **error)
 {
-	g_autoptr(GByteArray) req = g_byte_array_new ();
-
-	fu_byte_array_append_uint8 (req, page);
-	if (!fu_synaptics_rmi_device_write (self, RMI_DEVICE_PAGE_SELECT_REGISTER, req, error)) {
-		g_prefix_error (error, "failed to set RMA page 0x%x: ", page);
+	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
+	FuSynapticsRmiDeviceClass *klass_rmi = FU_SYNAPTICS_RMI_DEVICE_GET_CLASS (self);
+	if (priv->current_page == page)
+		return TRUE;
+	if (!klass_rmi->set_page (self, page, error))
 		return FALSE;
-	}
+	priv->current_page = page;
 	return TRUE;
 }
 
@@ -195,7 +195,7 @@ fu_synaptics_rmi_device_scan_pdt (FuSynapticsRmiDevice *self, GError **error)
 		guint32 pdt_end = page_start + RMI_DEVICE_PAGE_SCAN_END;
 
 		/* set page */
-		if (!fu_synaptics_rmi_device_set_rma_page (self, page, error))
+		if (!fu_synaptics_rmi_device_set_page (self, page, error))
 			return FALSE;
 
 		/* read out functions */
@@ -654,6 +654,7 @@ fu_synaptics_rmi_device_init (FuSynapticsRmiDevice *self)
 	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
 	fu_device_set_protocol (FU_DEVICE (self), "com.synaptics.rmi");
 	fu_device_add_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_UPDATABLE);
+	priv->current_page = 0xfe;
 	priv->functions = g_ptr_array_new_with_free_func (g_free);
 }
 
