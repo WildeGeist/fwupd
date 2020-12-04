@@ -204,7 +204,9 @@ fu_synaptics_rmi_device_scan_pdt (FuSynapticsRmiDevice *self, GError **error)
 			g_autoptr(GByteArray) res = NULL;
 			res = fu_synaptics_rmi_device_read (self, addr, RMI_DEVICE_PDT_ENTRY_SIZE, error);
 			if (res == NULL) {
-				g_prefix_error (error, "failed to read PDT entry @ 0x%04x: ", addr);
+				g_prefix_error (error,
+						"failed to read page %u PDT entry @ 0x%04x: ",
+						page, addr);
 				return FALSE;
 			}
 			func = fu_synaptics_rmi_function_parse (res, page_start, interrupt_count, error);

@@ -14,7 +14,7 @@
 struct _FuSynapticsRmiPs2Device {
 	FuSynapticsRmiDevice	 parent_instance;
 	FuIOChannel		*io_channel;
-	gboolean		 inRMIBackdoor;
+	gboolean		 in_backdoor;
 };
 
 G_DEFINE_TYPE (FuSynapticsRmiPs2Device, fu_synaptics_rmi_ps2_device, FU_TYPE_SYNAPTICS_RMI_DEVICE)
@@ -165,6 +165,9 @@ static gboolean
 fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (FuSynapticsRmiPs2Device *self,
 						 GError **error)
 {
+	if (self->in_backdoor)
+		return TRUE;
+
 	g_debug ("Enable RMI backdoor");
 
 	/* disable stream */
@@ -194,8 +197,7 @@ fu_synaptics_rmi_ps2_device_write_rmi_register (FuSynapticsRmiPs2Device *self,
 						guint timeout,
 						GError **error)
 {
-	if (!self->inRMIBackdoor &&
-	    !fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
+	if (!fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
@@ -250,18 +252,10 @@ fu_synaptics_rmi_ps2_device_read_rmi_register (FuSynapticsRmiPs2Device *self,
 {
 	guint32 response = 0;
 
-	/* maybe return val if fail? */
-	if (buf == NULL) {
-		g_set_error_literal (error,
-				     G_IO_ERROR,
-				     G_IO_ERROR_FAILED,
-				     "no buffer set!");
-		return FALSE;
-	}
+	g_return_val_if_fail (buf != NULL, FALSE);
 
-	g_debug ("fu_synaptics_rmi_ps2_device_read_rmi_register: register address = 0x%x", addr);
-	if (!self->inRMIBackdoor &&
-	    !fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
+	g_debug ("register address = 0x%x", addr);
+	if (!fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
@@ -301,8 +295,7 @@ fu_synaptics_rmi_ps2_device_read_rmi_packet_register (FuSynapticsRmiPs2Device *s
 	g_autoptr(GByteArray) buf = g_byte_array_new ();
 
 	g_debug ("register address = 0x%x", addr);
-	if (!self->inRMIBackdoor &&
-	    !fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
+	if (!fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return NULL;
 	}
@@ -353,7 +346,7 @@ fu_synaptics_rmi_ps2_device_read (FuSynapticsRmiDevice *rmi_device,
 {
 	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (rmi_device);
 	g_autoptr(GByteArray) buf = NULL;
-	gboolean isPacketRegister = TRUE; //FIXME?! How do we know?!
+	gboolean isPacketRegister = FALSE; //FIXME?! How do we know?!
 
 	if (!fu_synaptics_rmi_device_set_page (rmi_device,
 					       addr >> 8,
@@ -429,7 +422,7 @@ static void
 fu_synaptics_rmi_ps2_device_to_string (FuUdevDevice *device, guint idt, GString *str)
 {
 	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (device);
-	fu_common_string_append_kb (str, idt, "InRmiBackdoor", self->inRMIBackdoor);
+	fu_common_string_append_kb (str, idt, "InRmiBackdoor", self->in_backdoor);
 }
 
 static gboolean
@@ -561,6 +554,8 @@ fu_synaptics_rmi_ps2_device_setup (FuDevice *device, GError **error)
 static gboolean
 fu_synaptics_rmi_ps2_device_attach (FuDevice *device, GError **error)
 {
+	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (device);
+
 	/* sanity check */
 	if (!fu_device_has_flag (device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
 		g_debug ("already in runtime mode, skipping");
@@ -575,6 +570,7 @@ fu_synaptics_rmi_ps2_device_attach (FuDevice *device, GError **error)
 	}
 
 	/* rescan device */
+	self->in_backdoor = FALSE;
 	return fu_device_rescan (device, error);
 }
 
