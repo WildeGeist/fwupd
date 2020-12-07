@@ -14,6 +14,19 @@
 #include "fu-synaptics-rmi-common.h"
 #include "fu-synaptics-rmi-firmware.h"
 
+struct _FuSynapticsRmiFirmware {
+	FuFirmware		 parent_instance;
+	guint32			 checksum;
+	guint8			 io;
+	guint8			 bootloader_version;
+	guint32			 build_id;
+	guint16			 package_id;
+	guint16			 product_info;
+	gchar			*product_id;
+	guint8			 hasBlv5Signature;
+	guint32			 blv5SignatureSize;
+};
+
 G_DEFINE_TYPE (FuSynapticsRmiFirmware, fu_synaptics_rmi_firmware, FU_TYPE_FIRMWARE)
 
 #define RMI_IMG_CHECKSUM_OFFSET			0x00
@@ -378,6 +391,8 @@ fu_synaptics_rmi_firmware_parse (FuFirmware *firmware,
 			}
 			g_debug ("Blv5 signature size: %" G_GUINT32_FORMAT,
 				 self->blv5SignatureSize);
+		} else {
+			self->blv5SignatureSize = 0;
 		}
 		break;
 	case 16:
@@ -395,6 +410,12 @@ fu_synaptics_rmi_firmware_parse (FuFirmware *firmware,
 
 	/* success */
 	return TRUE;
+}
+
+guint32
+fu_synaptics_rmi_firmware_get_signature_size (FuSynapticsRmiFirmware *self)
+{
+	return self->blv5SignatureSize;
 }
 
 GBytes *

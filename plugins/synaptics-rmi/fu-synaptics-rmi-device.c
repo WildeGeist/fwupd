@@ -434,12 +434,9 @@ fu_synaptics_rmi_device_prepare_firmware (FuDevice *device,
 	
 	if (bytes_bin == NULL)
 		return NULL;
-	size_expected = (gsize) priv->flash.block_count_fw * (gsize) priv->flash.block_size;
-	FuSynapticsRmiFirmware *firmwareself = FU_SYNAPTICS_RMI_FIRMWARE (firmware);
-	gsize firmwareSize = (firmwareself->hasBlv5Signature) ? 
-				(g_bytes_get_size (bytes_bin) - firmwareself->blv5SignatureSize) : 
-				 g_bytes_get_size (bytes_bin);
-	if (firmwareSize != size_expected) {
+	size_expected = ((gsize) priv->flash.block_count_fw * (gsize) priv->flash.block_size) +
+			fu_synaptics_rmi_firmware_get_signature_size (FU_SYNAPTICS_RMI_FIRMWARE (firmware));
+	if (g_bytes_get_size (bytes_bin) != size_expected) {
 		g_set_error (error,
 			     FWUPD_ERROR,
 			     FWUPD_ERROR_INVALID_FILE,
