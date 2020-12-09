@@ -37,12 +37,12 @@ enum EPS2DataPortCommand {
 	edpAuxReset			= 0xFF,
 };
 
-enum ESynapticsDeviceResponse {
+typedef enum {
 	esdrTouchPad			= 0x47,
 	esdrStyk			= 0x46,
 	esdrControlBar			= 0x44,
 	esdrRGBControlBar		= 0x43,
-};
+} ESynapticsDeviceResponse;
 
 enum EStatusRequestSequence {
 	esrIdentifySynaptics		= 0x00,
@@ -92,7 +92,7 @@ enum EDeviceType {
 enum EStickDeviceType {
 	esdtNone			= 0,
 	esdtIBM,
-	esdtJYTSyna         = 5,
-	esdtSynaptics 		= 6,
+	esdtJYTSyna			= 5,
+	esdtSynaptics			= 6,
 	esdtUnknown			= 0xFFFFFFFF
 };

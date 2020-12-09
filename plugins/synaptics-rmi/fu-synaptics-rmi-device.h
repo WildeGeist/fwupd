@@ -34,11 +34,12 @@ struct _FuSynapticsRmiDeviceClass
 	gboolean		 (*set_page)			(FuSynapticsRmiDevice	*self,
 								 guint8			 page,
 								 GError			**error);
-	gboolean		 (*query_build_id)			(FuSynapticsRmiDevice *self, 
-								 guint32 *build_id, 
-								 GError **error);
-	GByteArray *	 (*query_product_sub_id)		(FuSynapticsRmiDevice *self, 
-								 GError **error);
+	gboolean		 (*query_build_id)		(FuSynapticsRmiDevice	*self,
+								 guint32		*build_id,
+								 GError			**error);
+	gboolean		 (*query_product_sub_id)	(FuSynapticsRmiDevice	 *self,
+								 guint8			*product_sub_id,
+								 GError			**error);
 };
 
 typedef struct {

@@ -518,25 +518,6 @@ fu_synaptics_rmi_hid_device_set_page (FuSynapticsRmiDevice *self,
 	return TRUE;
 }
 
-
-static gboolean
-fu_synaptics_rmi_hid_device_query_build_id (FuSynapticsRmiDevice *rmi_device, 
-						guint32 *build_id, 
-						GError **error)
-{
-	/* this doesn't need in HID device */
-	return TRUE;
-}
-
-static guint8
-fu_synaptics_rmi_hid_device_query_product_sub_id (FuSynapticsRmiDevice *rmi_device, 
-						guint32 *product_sub_id, 
-						GError **error)
-{
-	/* this doesn't need in HID device */
-	return 0;
-}
-
 static gboolean
 fu_synaptics_rmi_hid_device_probe (FuUdevDevice *device, GError **error)
 {
@@ -589,5 +570,4 @@ fu_synaptics_rmi_hid_device_class_init (FuSynapticsRmiHidDeviceClass *klass)
 	klass_rmi->wait_for_attr = fu_synaptics_rmi_hid_device_wait_for_attr;
 	klass_rmi->set_page = fu_synaptics_rmi_hid_device_set_page;
 	klass_rmi->query_status = fu_synaptics_rmi_hid_device_query_status;
-	klass_rmi->query_build_id = fu_synaptics_rmi_hid_device_query_build_id;
 }
