@@ -273,6 +273,13 @@ fu_synaptics_rmi_device_query_build_id (FuSynapticsRmiDevice *self, guint32 *bui
 	return klass_rmi->query_build_id (self, build_id, error);
 }
 
+static guint8 
+fu_synaptics_rmi_device_query_product_sub_id (FuSynapticsRmiDevice *self, GError **error)
+{
+	FuSynapticsRmiDeviceClass *klass_rmi = FU_SYNAPTICS_RMI_DEVICE_GET_CLASS (self);
+	return klass_rmi->query_product_sub_id (self, error);
+}
+
 gboolean
 fu_synaptics_rmi_device_setup (FuDevice *device, GError **error)
 {
@@ -317,7 +324,16 @@ fu_synaptics_rmi_device_setup (FuDevice *device, GError **error)
 		g_prefix_error (error, "failed to read the product id: ");
 		return FALSE;
 	}
+	
 	product_id = g_strndup ((const gchar *) f01_product_id->data, f01_product_id->len);
+	g_debug ("Ready to querying product sub id");
+	guint8 product_sub_id = fu_synaptics_rmi_device_query_product_sub_id (self, error);
+	if (product_sub_id != 0) {
+		g_debug ("For PS/2 device case 1");
+		/* For PS/2 device case */
+		g_autofree gchar *product_maj_id = g_strndup (product_id, 6);
+		product_id = g_strdup_printf ("%s-%03d", product_maj_id, product_sub_id);
+	}
 	if (product_id != NULL)
 		fu_synaptics_rmi_device_set_product_id (self, product_id);
 

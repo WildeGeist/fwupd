@@ -271,6 +271,24 @@ fu_synaptics_rmi_ps2_device_query_build_id (FuSynapticsRmiDevice *rmi_device,
 	return TRUE;
 }
 
+static guint8 
+fu_synaptics_rmi_ps2_device_query_product_sub_id (FuSynapticsRmiDevice *rmi_device, 
+						GError **error)
+{
+	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (rmi_device);
+	guint32 buf = 0;
+	guint8 sub_id = 0;
+	
+	buf = 0;
+	if (!fu_synaptics_rmi_ps2_device_status_request_sequence (self, esrReadCapabilities, &buf, error)) {
+		g_prefix_error (error, "failed to status_request_sequence read esrReadCapabilities: ");
+		return NULL;
+	} else {
+		sub_id = (buf >> 8) & 0xFF;
+	}
+	return sub_id;
+}
+
 static gboolean
 fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (FuSynapticsRmiPs2Device *self,
 						 GError **error)
@@ -730,4 +748,5 @@ fu_synaptics_rmi_ps2_device_class_init (FuSynapticsRmiPs2DeviceClass *klass)
 	klass_rmi->set_page = fu_synaptics_rmi_ps2_device_set_page;
 	klass_rmi->query_status = fu_synaptics_rmi_ps2_device_query_status;
 	klass_rmi->query_build_id = fu_synaptics_rmi_ps2_device_query_build_id;
+	klass_rmi->query_product_sub_id = fu_synaptics_rmi_ps2_device_query_product_sub_id;
 }

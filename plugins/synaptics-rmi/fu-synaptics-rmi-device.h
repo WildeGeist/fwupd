@@ -37,6 +37,8 @@ struct _FuSynapticsRmiDeviceClass
 	gboolean		 (*query_build_id)			(FuSynapticsRmiDevice *self, 
 								 guint32 *build_id, 
 								 GError **error);
+	GByteArray *	 (*query_product_sub_id)		(FuSynapticsRmiDevice *self, 
+								 GError **error);
 };
 
 typedef struct {
