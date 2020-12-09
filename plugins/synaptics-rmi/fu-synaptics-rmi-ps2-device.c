@@ -251,23 +251,21 @@ fu_synaptics_rmi_ps2_device_query_build_id (FuSynapticsRmiDevice *rmi_device,
 
 	enum ESynapticsDeviceResponse esdr = (enum ESynapticsDeviceResponse)((buf & 0xFF00) >> 8);
 	deviceType = (esdr == esdrTouchPad) ? edtTouchPad : edtUnknown;
-	if (deviceType == edtTouchPad) {
-		if (!fu_synaptics_rmi_ps2_device_detect_synaptics_styk(self, &isSynapticsStyk, error)) {
-			g_prefix_error (error, "failed to detect Synaptics styk: ");
+	if (!fu_synaptics_rmi_ps2_device_detect_synaptics_styk(self, &isSynapticsStyk, error)) {
+		g_prefix_error (error, "failed to detect Synaptics styk: ");
+		return FALSE;
+	}
+	if ((deviceType == edtTouchPad) || isSynapticsStyk) {
+		/// Get the firmware id from the Extra Capabilities 2 Byte
+		// The firmware id is located in bits 0 - 23
+		g_debug ("Trying to query capability2");
+		buf = 0;
+		if (!fu_synaptics_rmi_ps2_device_status_request_sequence (self, esrReadExtraCapabilities2, &buf, error)) {
+			g_prefix_error (error, "failed to status_request_sequence read extraCapabilities2: ");
 			return FALSE;
-		} 
-		if (isSynapticsStyk == TRUE) {
-			/// Get the firmware id from the Extra Capabilities 2 Byte
-			// The firmware id is located in bits 0 - 23
-			g_debug ("Trying to query capability2");
-			buf = 0;
-			if (!fu_synaptics_rmi_ps2_device_status_request_sequence (self, esrReadExtraCapabilities2, &buf, error)) {
-				g_prefix_error (error, "failed to status_request_sequence read extraCapabilities2: ");
-				return FALSE;
-			} else {
-				*build_id = buf;
-				g_debug ("FW ID : %d", *build_id);
-			}
+		} else {
+			*build_id = buf;
+			g_debug ("FW ID : %d", *build_id);
 		}
 	} 
 	return TRUE;
