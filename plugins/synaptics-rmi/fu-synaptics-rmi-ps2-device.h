@@ -92,10 +92,7 @@ enum EDeviceType {
 enum EStickDeviceType {
 	esdtNone			= 0,
 	esdtIBM,
-	esdtALPS,
-	esdtELAN,
-	esdtNXP,
-	esdtJYTSyna,
-	esdtSynaptics,
+	esdtJYTSyna         = 5,
+	esdtSynaptics 		= 6,
 	esdtUnknown			= 0xFFFFFFFF
 };

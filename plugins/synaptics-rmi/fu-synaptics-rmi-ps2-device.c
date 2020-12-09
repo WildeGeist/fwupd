@@ -137,6 +137,46 @@ fu_synaptics_rmi_ps2_device_set_resolution_sequence (FuSynapticsRmiPs2Device *se
 }
 
 static gboolean
+fu_synaptics_rmi_ps2_device_status_request_sequence (FuSynapticsRmiPs2Device *self,
+							guint8 ucArgument, 
+							guint32 *buf,
+							GError **error)
+{
+	gboolean success = FALSE;
+
+	// allow 3 retries
+	for (gint i = 0; i < 3; ++i) {
+		if (!fu_synaptics_rmi_ps2_device_set_resolution_sequence (self, ucArgument, FALSE, error)) {
+			success = FALSE;
+			continue;
+		}
+		if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxStatusRequest, 10, error)) {
+			success = FALSE;
+			continue;
+		}
+		success = TRUE;
+		break;
+	}
+
+	if (success == FALSE) {
+		return FALSE;
+	}
+
+	// Read the response from the Status Request
+	guint8 aucBytes[3];
+	memset(aucBytes, 0, sizeof(guint8) * 3);
+	for (gint i = 0; i < 3; ++i) {
+		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &aucBytes[i], 10, error)) {
+			g_prefix_error (error, "failed to read byte: ");
+			return FALSE;
+		}
+		*buf = ((*buf) << 8) | aucBytes[i];
+	}
+
+	return TRUE;
+}
+
+static gboolean
 fu_synaptics_rmi_ps2_device_sample_rate_sequence (FuSynapticsRmiPs2Device *self,
 						  guint8 param,
 						  guint8 arg,
@@ -164,6 +204,72 @@ fu_synaptics_rmi_ps2_device_sample_rate_sequence (FuSynapticsRmiPs2Device *self,
 		break;
 	}
 	/* success */
+	return TRUE;
+}
+
+static gboolean
+fu_synaptics_rmi_ps2_device_detect_synaptics_styk (FuSynapticsRmiPs2Device *self, gboolean *result, GError **error)
+{
+	guint8 ucData;
+	if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxIBMReadSecondaryID, 10, error)){
+		g_prefix_error (error, "failed to write IBMReadSecondaryID(0xE1): ");
+		return FALSE;
+	}
+	if (!fu_synaptics_rmi_ps2_device_read_byte (self, &ucData, 10, error)) {
+		g_prefix_error (error, "failed to receive IBMReadSecondaryID: ");
+		return FALSE;
+	}
+	if ((ucData == esdtJYTSyna) || (ucData == esdtSynaptics)) {
+		g_debug ("Synaptics stick detected");
+		*result = TRUE;
+		return TRUE;
+	} else {
+		g_debug ("Non Synaptics stick detected");
+		return FALSE;
+	}
+}
+
+static gboolean 
+fu_synaptics_rmi_ps2_device_query_build_id (FuSynapticsRmiDevice *rmi_device, 
+						guint32 *build_id, 
+						GError **error)
+{
+	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (rmi_device);
+	*build_id = 0;
+	guint32 buf = 0;
+	enum EDeviceType deviceType;
+	gboolean isSynapticsStyk = FALSE;
+
+	self->in_backdoor = FALSE;
+
+	if (!fu_synaptics_rmi_ps2_device_status_request_sequence (self, esrIdentifySynaptics, &buf, error)) {
+		g_prefix_error (error, "failed to status request sequence for IdentifySynaptics: ");
+		return FALSE;
+	}
+
+	g_debug ("Identify Synaptics response = 0x%x\n", buf);
+
+	enum ESynapticsDeviceResponse esdr = (enum ESynapticsDeviceResponse)((buf & 0xFF00) >> 8);
+	deviceType = (esdr == esdrTouchPad) ? edtTouchPad : edtUnknown;
+	if (deviceType == edtTouchPad) {
+		if (!fu_synaptics_rmi_ps2_device_detect_synaptics_styk(self, &isSynapticsStyk, error)) {
+			g_prefix_error (error, "failed to detect Synaptics styk: ");
+			return FALSE;
+		} 
+		if (isSynapticsStyk == TRUE) {
+			/// Get the firmware id from the Extra Capabilities 2 Byte
+			// The firmware id is located in bits 0 - 23
+			g_debug ("Trying to query capability2");
+			buf = 0;
+			if (!fu_synaptics_rmi_ps2_device_status_request_sequence (self, esrReadExtraCapabilities2, &buf, error)) {
+				g_prefix_error (error, "failed to status_request_sequence read extraCapabilities2: ");
+				return FALSE;
+			} else {
+				*build_id = buf;
+				g_debug ("FW ID : %d", *build_id);
+			}
+		}
+	} 
 	return TRUE;
 }
 
@@ -625,4 +731,5 @@ fu_synaptics_rmi_ps2_device_class_init (FuSynapticsRmiPs2DeviceClass *klass)
 	klass_rmi->write = fu_synaptics_rmi_ps2_device_write;
 	klass_rmi->set_page = fu_synaptics_rmi_ps2_device_set_page;
 	klass_rmi->query_status = fu_synaptics_rmi_ps2_device_query_status;
+	klass_rmi->query_build_id = fu_synaptics_rmi_ps2_device_query_build_id;
 }

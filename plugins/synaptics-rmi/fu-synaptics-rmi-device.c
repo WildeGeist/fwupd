@@ -266,6 +266,13 @@ fu_synaptics_rmi_device_query_status (FuSynapticsRmiDevice *self, GError **error
 	return klass_rmi->query_status (self, error);
 }
 
+static gboolean
+fu_synaptics_rmi_device_query_build_id (FuSynapticsRmiDevice *self, guint32 *build_id, GError **error)
+{
+	FuSynapticsRmiDeviceClass *klass_rmi = FU_SYNAPTICS_RMI_DEVICE_GET_CLASS (self);
+	return klass_rmi->query_build_id (self, build_id, error);
+}
+
 gboolean
 fu_synaptics_rmi_device_setup (FuDevice *device, GError **error)
 {
@@ -366,6 +373,13 @@ fu_synaptics_rmi_device_setup (FuDevice *device, GError **error)
 				     f01_tmp->len, error))
 			return FALSE;
 		priv->flash.build_id = fu_common_read_uint32 (buf32, G_LITTLE_ENDIAN);
+	}
+
+	guint32 build_id = 0;
+	if (!fu_synaptics_rmi_device_query_build_id(self, &build_id, error)) {
+		g_prefix_error (error, "failed to querying PS2 build id: ");
+	} else {
+		priv->flash.build_id = build_id;
 	}
 
 	/* get Function34_Query0,1 */
