@@ -168,6 +168,14 @@ fu_synaprom_device_set_serial_number (FuSynapromDevice *self, guint64 serial_num
 }
 
 static gboolean
+fu_synaprom_device_prepare (FuDevice *device, FwupdInstallFlags flags, GError **error)
+{
+	fu_device_set_status (device, FWUPD_STATUS_DEVICE_BUSY);
+	fu_device_sleep_with_progress (device, 2);
+	return TRUE;
+}
+
+static gboolean
 fu_synaprom_device_setup (FuDevice *device, GError **error)
 {
 	FuSynapromDevice *self = FU_SYNAPROM_DEVICE (device);
@@ -456,6 +464,7 @@ fu_synaprom_device_class_init (FuSynapromDeviceClass *klass)
 	FuUsbDeviceClass *klass_usb_device = FU_USB_DEVICE_CLASS (klass);
 	klass_device->write_firmware = fu_synaprom_device_write_firmware;
 	klass_device->prepare_firmware = fu_synaprom_device_prepare_fw;
+	klass_device->prepare = fu_synaprom_device_prepare;
 	klass_device->setup = fu_synaprom_device_setup;
 	klass_device->reload = fu_synaprom_device_setup;
 	klass_device->attach = fu_synaprom_device_attach;
