@@ -64,6 +64,8 @@ typedef struct
 	FuSynapticsRmiFunction	*f01;
 	FuSynapticsRmiFunction	*f34;
 	guint8			 current_page;
+	gboolean		 hasSecureUpdate;
+	guint16			 RSAKeyLength;
 } FuSynapticsRmiDevicePrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (FuSynapticsRmiDevice, fu_synaptics_rmi_device, FU_TYPE_UDEV_DEVICE)
@@ -239,6 +241,34 @@ fu_synaptics_rmi_device_scan_pdt (FuSynapticsRmiDevice *self, GError **error)
 
 	/* success */
 	return TRUE;
+}
+
+void
+fu_synaptics_rmi_device_set_hasSecureUpdate (FuSynapticsRmiDevice *self, 
+					const gboolean hasSecureUpdate) 
+{
+	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
+	priv->hasSecureUpdate = hasSecureUpdate;
+}
+
+void
+fu_synaptics_rmi_device_set_RSA_key_length (FuSynapticsRmiDevice *self, 
+					const guint16 RSAKeyLength) 
+{
+	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
+	priv->RSAKeyLength = RSAKeyLength;
+}
+
+gboolean
+fu_synaptics_rmi_device_get_hasSecureUpdate (FuSynapticsRmiDevice *self) {
+	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
+	return priv->hasSecureUpdate;
+}
+
+guint16
+fu_synaptics_rmi_device_get_RSA_key_length (FuSynapticsRmiDevice *self) {
+	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
+	return priv->RSAKeyLength;
 }
 
 static void

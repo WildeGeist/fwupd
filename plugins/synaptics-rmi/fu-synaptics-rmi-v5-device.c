@@ -212,6 +212,9 @@ fu_synaptics_rmi_v5_device_setup (FuSynapticsRmiDevice *self, GError **error)
 	FuSynapticsRmiFlash *flash = fu_synaptics_rmi_device_get_flash (self);
 	g_autoptr(GByteArray) f34_data0 = NULL;
 	g_autoptr(GByteArray) f34_data2 = NULL;
+	g_autoptr(GByteArray) bufFlashProperties2 = NULL;
+	g_autoptr(GByteArray) buffRSAKey = NULL;
+	guint16 flashProperties2;
 
 	/* f34 */
 	f34 = fu_synaptics_rmi_device_get_function (self, 0x34, error);
@@ -226,6 +229,27 @@ fu_synaptics_rmi_v5_device_setup (FuSynapticsRmiDevice *self, GError **error)
 	}
 	flash->bootloader_id[0] = f34_data0->data[0];
 	flash->bootloader_id[1] = f34_data0->data[1];
+
+	bufFlashProperties2 = fu_synaptics_rmi_device_read (self, f34->query_base + 0x9, 1, error);
+	if (bufFlashProperties2 == NULL) {
+		g_prefix_error (error, "failed to read Flash Properties 2: ");
+		return FALSE;
+	}
+	flashProperties2 = fu_common_read_uint16 (bufFlashProperties2->data, G_LITTLE_ENDIAN);
+	if (flashProperties2 & 0x01) {
+		fu_synaptics_rmi_device_set_hasSecureUpdate (self, TRUE);
+		buffRSAKey = fu_synaptics_rmi_device_read (self, f34->query_base + 0x9 + 0x1, 2, error);
+		if (buffRSAKey == NULL) {
+			g_prefix_error (error, "failed to read RSA key length: ");
+			return FALSE;
+		}
+		fu_synaptics_rmi_device_set_RSA_key_length (self, fu_common_read_uint16 (buffRSAKey->data, G_LITTLE_ENDIAN));
+		g_debug ("RSA key length : %d", fu_synaptics_rmi_device_get_RSA_key_length (self));
+	} else {
+		fu_synaptics_rmi_device_set_hasSecureUpdate (self, FALSE);
+		fu_synaptics_rmi_device_set_RSA_key_length (self, 0);
+	}
+
 
 	/* get flash properties */
 	f34_data2 = fu_synaptics_rmi_device_read (self, f34->query_base + 0x2, 0x7, error);

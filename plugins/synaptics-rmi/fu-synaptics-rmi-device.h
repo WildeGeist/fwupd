@@ -100,3 +100,9 @@ FuSynapticsRmiFunction	*fu_synaptics_rmi_device_get_function	(FuSynapticsRmiDevi
 								 GError			**error);
 gboolean		 fu_synaptics_rmi_device_poll_wait	(FuSynapticsRmiDevice	*self,
 								 GError			**error);
+void			 fu_synaptics_rmi_device_set_hasSecureUpdate (FuSynapticsRmiDevice *self, 
+					const gboolean hasSecureUpdate); 
+void			 fu_synaptics_rmi_device_set_RSA_key_length (FuSynapticsRmiDevice *self, 
+					const guint16 RSAKeyLength); 
+gboolean		 fu_synaptics_rmi_device_get_hasSecureUpdate (FuSynapticsRmiDevice *self);
+guint16			 fu_synaptics_rmi_device_get_RSA_key_length (FuSynapticsRmiDevice *self);
