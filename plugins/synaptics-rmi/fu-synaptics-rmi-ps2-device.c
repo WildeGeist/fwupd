@@ -294,9 +294,11 @@ fu_synaptics_rmi_ps2_device_query_product_sub_id (FuSynapticsRmiDevice *rmi_devi
 }
 
 static gboolean
-fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (FuSynapticsRmiPs2Device *self,
-						 GError **error)
+fu_synaptics_rmi_ps2_device_enter_backdoor (FuSynapticsRmiDevice *rmi_device,
+					    GError **error)
 {
+	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (rmi_device);
+
 	/* disable stream */
 	if (!fu_synaptics_rmi_ps2_device_write_byte (self, edpAuxDisable, 50, error)) {
 		g_prefix_error (error, "failed to disable stream mode: ");
@@ -320,14 +322,6 @@ fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (FuSynapticsRmiPs2Device *self,
 }
 
 static gboolean
-fu_synaptics_rmi_device_enable_rmi_backdoor (FuSynapticsRmiDevice *rmi_device,
-						 GError **error)
-{
-	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (rmi_device);
-	return fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error);
-}
-
-static gboolean
 fu_synaptics_rmi_ps2_device_write_rmi_register (FuSynapticsRmiPs2Device *self,
 						guint8 addr,
 						const guint8 *buf,
@@ -337,12 +331,12 @@ fu_synaptics_rmi_ps2_device_write_rmi_register (FuSynapticsRmiPs2Device *self,
 {
 	g_return_val_if_fail (timeout > 0, FALSE);
 	if (!self->in_backdoor) {
-		if (!fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
+		if (!fu_synaptics_rmi_ps2_device_enter_backdoor (FU_SYNAPTICS_RMI_DEVICE (self), error)) {
 			g_prefix_error (error, "failed to enable RMI backdoor: ");
 			return FALSE;
 		}
 	}
-	
+
 	if (!fu_synaptics_rmi_ps2_device_write_byte (self,
 						     edpAuxSetScaling2To1,
 						     timeout,
@@ -397,7 +391,7 @@ fu_synaptics_rmi_ps2_device_read_rmi_register (FuSynapticsRmiPs2Device *self,
 	g_return_val_if_fail (buf != NULL, FALSE);
 
 	if (!self->in_backdoor) {
-		if (!fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
+		if (!fu_synaptics_rmi_ps2_device_enter_backdoor (FU_SYNAPTICS_RMI_DEVICE (self), error)) {
 			g_prefix_error (error, "failed to enable RMI backdoor: ");
 			return FALSE;
 		}
@@ -436,7 +430,7 @@ fu_synaptics_rmi_ps2_device_read_rmi_packet_register (FuSynapticsRmiPs2Device *s
 	g_autoptr(GByteArray) buf = g_byte_array_new ();
 
 	if (!self->in_backdoor) {
-		if (!fu_synaptics_rmi_ps2_device_enable_rmi_backdoor (self, error)) {
+		if (!fu_synaptics_rmi_ps2_device_enter_backdoor (FU_SYNAPTICS_RMI_DEVICE (self), error)) {
 			g_prefix_error (error, "failed to enable RMI backdoor: ");
 			return FALSE;
 		}
@@ -532,7 +526,7 @@ fu_synaptics_rmi_ps2_device_read (FuSynapticsRmiDevice *rmi_device,
 		}
 	}
 	if (g_getenv ("FWUPD_SYNAPTICS_RMI_VERBOSE") != NULL) {
-		fu_common_dump_full (G_LOG_DOMAIN, "PS2DeviceRead", 
+		fu_common_dump_full (G_LOG_DOMAIN, "PS2DeviceRead",
 				     buf->data, buf->len,
 				     80, FU_DUMP_FLAGS_NONE);
 	}
@@ -771,7 +765,7 @@ fu_synaptics_rmi_ps2_device_detach (FuDevice *device, GError **error)
 		return FALSE;
 	}
 
-	if (!fu_synaptics_rmi_device_enable_rmi_backdoor (self, error)){
+	if (!fu_synaptics_rmi_device_enter_backdoor (self, error)){
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
@@ -824,6 +818,7 @@ fu_synaptics_rmi_ps2_device_init (FuSynapticsRmiPs2Device *self)
 	fu_device_set_name (FU_DEVICE (self), "TouchStyk");
 	fu_device_set_vendor (FU_DEVICE (self), "Synaptics");
 	fu_device_set_vendor_id (FU_DEVICE (self), "HIDRAW:0x06CB");
+	fu_synaptics_rmi_device_set_max_page (FU_SYNAPTICS_RMI_DEVICE (self), 0x1);
 	fu_udev_device_set_flags (FU_UDEV_DEVICE (self),
 				  FU_UDEV_DEVICE_FLAG_OPEN_READ |
 				  FU_UDEV_DEVICE_FLAG_OPEN_WRITE);
@@ -867,5 +862,5 @@ fu_synaptics_rmi_ps2_device_class_init (FuSynapticsRmiPs2DeviceClass *klass)
 	klass_rmi->query_build_id = fu_synaptics_rmi_ps2_device_query_build_id;
 	klass_rmi->query_product_sub_id = fu_synaptics_rmi_ps2_device_query_product_sub_id;
 	klass_rmi->wait_for_attr = fu_synaptics_rmi_ps2_device_wait_for_attr;
-	klass_rmi->enter_rmi_backdoor = fu_synaptics_rmi_device_enable_rmi_backdoor;
+	klass_rmi->enter_backdoor = fu_synaptics_rmi_ps2_device_enter_backdoor;
 }

@@ -14,7 +14,6 @@
 #include "fu-synaptics-rmi-v6-device.h"
 #include "fu-synaptics-rmi-v7-device.h"
 
-#define RMI_DEVICE_MAX_PAGE				0x1
 #define RMI_DEVICE_PAGE_SIZE				0x100
 #define RMI_DEVICE_PAGE_SCAN_START			0x00e9
 #define RMI_DEVICE_PAGE_SCAN_END			0x0005
@@ -64,8 +63,8 @@ typedef struct
 	FuSynapticsRmiFunction	*f01;
 	FuSynapticsRmiFunction	*f34;
 	guint8			 current_page;
-	gboolean		 hasSecureUpdate;
-	guint16			 RSAKeyLength;
+	guint16			 rsa_keylen;	/* 0x0 for non-secure update */
+	guint8			 max_page;
 } FuSynapticsRmiDevicePrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (FuSynapticsRmiDevice, fu_synaptics_rmi_device, FU_TYPE_UDEV_DEVICE)
@@ -101,6 +100,9 @@ fu_synaptics_rmi_device_to_string (FuUdevDevice *device, guint idt, GString *str
 {
 	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
 	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
+	fu_common_string_append_kx (str, idt, "CurrentPage", priv->current_page);
+	fu_common_string_append_kx (str, idt, "MaxPage", priv->max_page);
+	fu_common_string_append_kx (str, idt, "RsaKeylen", priv->rsa_keylen);
 	if (priv->f34 != NULL) {
 		fu_common_string_append_kx (str, idt, "BlVer",
 					    priv->f34->function_version + 0x5);
@@ -170,10 +172,10 @@ fu_synaptics_rmi_device_set_page (FuSynapticsRmiDevice *self, guint8 page, GErro
 gboolean
 fu_synaptics_rmi_device_reset (FuSynapticsRmiDevice *self, GError **error)
 {
-	g_debug ("reset device");
 	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
 	g_autoptr(GByteArray) req = g_byte_array_new ();
 
+	g_debug ("reset device");
 	fu_byte_array_append_uint8 (req, RMI_F01_CMD_DEVICE_RESET);
 	if (!fu_synaptics_rmi_device_write (self, priv->f01->command_base, req, error))
 		return FALSE;
@@ -192,7 +194,7 @@ fu_synaptics_rmi_device_scan_pdt (FuSynapticsRmiDevice *self, GError **error)
 	g_ptr_array_set_size (priv->functions, 0);
 
 	/* scan pages */
-	for (guint page = 0; page < RMI_DEVICE_MAX_PAGE; page++) {
+	for (guint page = 0; page < priv->max_page; page++) {
 		gboolean found = FALSE;
 		guint32 page_start = RMI_DEVICE_PAGE_SIZE * page;
 		guint32 pdt_start = page_start + RMI_DEVICE_PAGE_SCAN_START;
@@ -246,31 +248,33 @@ fu_synaptics_rmi_device_scan_pdt (FuSynapticsRmiDevice *self, GError **error)
 }
 
 void
-fu_synaptics_rmi_device_set_hasSecureUpdate (FuSynapticsRmiDevice *self, 
-					const gboolean hasSecureUpdate) 
+fu_synaptics_rmi_device_set_rsa_keylen (FuSynapticsRmiDevice *self,
+					guint16 rsa_keylen)
 {
 	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
-	priv->hasSecureUpdate = hasSecureUpdate;
-}
-
-void
-fu_synaptics_rmi_device_set_RSA_key_length (FuSynapticsRmiDevice *self, 
-					const guint16 RSAKeyLength) 
-{
-	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
-	priv->RSAKeyLength = RSAKeyLength;
-}
-
-gboolean
-fu_synaptics_rmi_device_get_hasSecureUpdate (FuSynapticsRmiDevice *self) {
-	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
-	return priv->hasSecureUpdate;
+	priv->rsa_keylen = rsa_keylen;
 }
 
 guint16
-fu_synaptics_rmi_device_get_RSA_key_length (FuSynapticsRmiDevice *self) {
+fu_synaptics_rmi_device_get_rsa_keylen (FuSynapticsRmiDevice *self)
+{
 	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
-	return priv->RSAKeyLength;
+	return priv->rsa_keylen;
+}
+
+void
+fu_synaptics_rmi_device_set_max_page (FuSynapticsRmiDevice *self,
+				      guint8 max_page)
+{
+	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
+	priv->max_page = max_page;
+}
+
+guint8
+fu_synaptics_rmi_device_get_max_page (FuSynapticsRmiDevice *self)
+{
+	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
+	return priv->max_page;
 }
 
 static void
@@ -592,11 +596,13 @@ fu_synaptics_rmi_device_wait_for_attr (FuSynapticsRmiDevice *self,
 }
 
 gboolean
-fu_synaptics_rmi_device_enter_rmi_backdoor (FuSynapticsRmiDevice *self,
-				       GError **error)
+fu_synaptics_rmi_device_enter_backdoor (FuSynapticsRmiDevice *self,
+					    GError **error)
 {
 	FuSynapticsRmiDeviceClass *klass_rmi = FU_SYNAPTICS_RMI_DEVICE_GET_CLASS (self);
-	return klass_rmi->enter_rmi_backdoor (self, error);
+	if (klass_rmi->enter_backdoor == NULL)
+		return TRUE;
+	return klass_rmi->enter_backdoor (self, error);
 }
 
 gboolean

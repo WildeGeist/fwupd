@@ -40,7 +40,7 @@ struct _FuSynapticsRmiDeviceClass
 	gboolean		 (*query_product_sub_id)	(FuSynapticsRmiDevice	 *self,
 								 guint8			*product_sub_id,
 								 GError			**error);
-	gboolean		 (*enter_rmi_backdoor)	(FuSynapticsRmiDevice	 *self,
+	gboolean		 (*enter_backdoor)		(FuSynapticsRmiDevice	 *self,
 								 GError			**error);
 };
 
@@ -102,11 +102,11 @@ FuSynapticsRmiFunction	*fu_synaptics_rmi_device_get_function	(FuSynapticsRmiDevi
 								 GError			**error);
 gboolean		 fu_synaptics_rmi_device_poll_wait	(FuSynapticsRmiDevice	*self,
 								 GError			**error);
-void			 fu_synaptics_rmi_device_set_hasSecureUpdate (FuSynapticsRmiDevice *self, 
-					const gboolean hasSecureUpdate); 
-void			 fu_synaptics_rmi_device_set_RSA_key_length (FuSynapticsRmiDevice *self, 
-					const guint16 RSAKeyLength); 
-gboolean		 fu_synaptics_rmi_device_get_hasSecureUpdate (FuSynapticsRmiDevice *self);
-guint16			 fu_synaptics_rmi_device_get_RSA_key_length (FuSynapticsRmiDevice *self);
-gboolean		 fu_synaptics_rmi_device_enter_rmi_backdoor (FuSynapticsRmiDevice *self,
-				       			 GError **error);
+void			 fu_synaptics_rmi_device_set_rsa_keylen	(FuSynapticsRmiDevice	*self,
+								 guint16		 rsa_keylen);
+guint16			 fu_synaptics_rmi_device_get_rsa_keylen	(FuSynapticsRmiDevice	*self);
+void			 fu_synaptics_rmi_device_set_max_page	(FuSynapticsRmiDevice	*self,
+								 guint8			 max_page);
+guint8			 fu_synaptics_rmi_device_get_max_page	(FuSynapticsRmiDevice	*self);
+gboolean		 fu_synaptics_rmi_device_enter_backdoor	(FuSynapticsRmiDevice	*self,
+								 GError			**error);

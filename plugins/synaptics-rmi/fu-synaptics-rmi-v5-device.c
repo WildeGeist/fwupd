@@ -106,8 +106,8 @@ fu_synaptics_rmi_v5_device_write_firmware (FuDevice *device,
 		return FALSE;
 	}
 
-	if (!fu_synaptics_rmi_device_enter_rmi_backdoor (self, error)) {
-		g_prefix_error (error, "failed to enable RMI backdoor: ");
+	if (!fu_synaptics_rmi_device_enter_backdoor (self, error)) {
+		g_prefix_error (error, "failed to enable backdoor: ");
 		return FALSE;
 	}
 
@@ -221,11 +221,10 @@ fu_synaptics_rmi_v5_device_setup (FuSynapticsRmiDevice *self, GError **error)
 {
 	FuSynapticsRmiFunction *f34;
 	FuSynapticsRmiFlash *flash = fu_synaptics_rmi_device_get_flash (self);
+	guint16 flash_properties2 = 0;
 	g_autoptr(GByteArray) f34_data0 = NULL;
 	g_autoptr(GByteArray) f34_data2 = NULL;
-	g_autoptr(GByteArray) bufFlashProperties2 = NULL;
-	g_autoptr(GByteArray) buffRSAKey = NULL;
-	guint16 flashProperties2;
+	g_autoptr(GByteArray) buf_flash_properties2 = NULL;
 
 	/* f34 */
 	f34 = fu_synaptics_rmi_device_get_function (self, 0x34, error);
@@ -241,24 +240,44 @@ fu_synaptics_rmi_v5_device_setup (FuSynapticsRmiDevice *self, GError **error)
 	flash->bootloader_id[0] = f34_data0->data[0];
 	flash->bootloader_id[1] = f34_data0->data[1];
 
-	bufFlashProperties2 = fu_synaptics_rmi_device_read (self, f34->query_base + 0x9, 1, error);
-	if (bufFlashProperties2 == NULL) {
+	buf_flash_properties2 = fu_synaptics_rmi_device_read (self, f34->query_base + 0x9, 1, error);
+	if (buf_flash_properties2 == NULL) {
 		g_prefix_error (error, "failed to read Flash Properties 2: ");
 		return FALSE;
 	}
-	flashProperties2 = fu_common_read_uint16 (bufFlashProperties2->data, G_LITTLE_ENDIAN);
-	if (flashProperties2 & 0x01) {
-		fu_synaptics_rmi_device_set_hasSecureUpdate (self, TRUE);
-		buffRSAKey = fu_synaptics_rmi_device_read (self, f34->query_base + 0x9 + 0x1, 2, error);
-		if (buffRSAKey == NULL) {
+	if (!fu_common_read_uint16_safe (buf_flash_properties2->data,
+					 buf_flash_properties2->len,
+					 0x0, /* offset */
+					 &flash_properties2,
+					 G_LITTLE_ENDIAN,
+					 error)) {
+		g_prefix_error (error, "failed to parse Flash Properties 2: ");
+		return FALSE;
+	}
+	if (flash_properties2 & 0x01) {
+		guint16 rsa_keylen = 0;
+		g_autoptr(GByteArray) buf_rsa_key = NULL;
+		buf_rsa_key = fu_synaptics_rmi_device_read (self,
+							    f34->query_base + 0x9 + 0x1,
+							    2,
+							    error);
+		if (buf_rsa_key == NULL) {
 			g_prefix_error (error, "failed to read RSA key length: ");
 			return FALSE;
 		}
-		fu_synaptics_rmi_device_set_RSA_key_length (self, fu_common_read_uint16 (buffRSAKey->data, G_LITTLE_ENDIAN));
-		g_debug ("RSA key length : %d", fu_synaptics_rmi_device_get_RSA_key_length (self));
+		if (!fu_common_read_uint16_safe (buf_rsa_key->data,
+						 buf_rsa_key->len,
+						 0x0, /* offset */
+						 &rsa_keylen,
+						 G_LITTLE_ENDIAN,
+						 error)) {
+			g_prefix_error (error, "failed to parse RSA key length: ");
+			return FALSE;
+		}
+		g_debug ("RSA key length: %d", rsa_keylen);
+		fu_synaptics_rmi_device_set_rsa_keylen (self, rsa_keylen);
 	} else {
-		fu_synaptics_rmi_device_set_hasSecureUpdate (self, FALSE);
-		fu_synaptics_rmi_device_set_RSA_key_length (self, 0);
+		fu_synaptics_rmi_device_set_rsa_keylen (self, 0);
 	}
 
 
