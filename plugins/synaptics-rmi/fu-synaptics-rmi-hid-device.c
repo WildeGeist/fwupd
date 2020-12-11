@@ -547,6 +547,13 @@ fu_synaptics_rmi_hid_device_query_status (FuSynapticsRmiDevice *rmi_device,
 	return FALSE;
 }
 
+static gboolean
+fu_synaptics_rmi_hid_device_enable_rmi_backdoor (FuSynapticsRmiDevice *self,
+						 GError **error)
+{
+	return TRUE;
+}
+
 static void
 fu_synaptics_rmi_hid_device_init (FuSynapticsRmiHidDevice *self)
 {
@@ -570,4 +577,5 @@ fu_synaptics_rmi_hid_device_class_init (FuSynapticsRmiHidDeviceClass *klass)
 	klass_rmi->wait_for_attr = fu_synaptics_rmi_hid_device_wait_for_attr;
 	klass_rmi->set_page = fu_synaptics_rmi_hid_device_set_page;
 	klass_rmi->query_status = fu_synaptics_rmi_hid_device_query_status;
+	klass_rmi->enter_rmi_backdoor = fu_synaptics_rmi_hid_device_enable_rmi_backdoor;
 }

@@ -95,12 +95,19 @@ fu_synaptics_rmi_v5_device_write_firmware (FuDevice *device,
 	g_autoptr(GPtrArray) chunks_cfg = NULL;
 	g_autoptr(GByteArray) req_addr = g_byte_array_new ();
 
+	g_debug ("v5 write firmware");
+
 	/* we should be in bootloader mode now, but check anyway */
 	if (!fu_device_has_flag (device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
 		g_set_error_literal (error,
 				     FWUPD_ERROR,
 				     FWUPD_ERROR_NOT_SUPPORTED,
 				     "not bootloader, perhaps need detach?!");
+		return FALSE;
+	}
+
+	if (!fu_synaptics_rmi_device_enter_rmi_backdoor (self, error)) {
+		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
 	}
 
@@ -124,6 +131,10 @@ fu_synaptics_rmi_v5_device_write_firmware (FuDevice *device,
 	bytes_cfg = fu_firmware_get_image_by_id_bytes (firmware, "config", error);
 	if (bytes_cfg == NULL)
 		return FALSE;
+
+	/* Currently for implementation breakpoint*/
+	fu_device_sleep_with_progress (device, 5);
+	return TRUE;
 
 	/* disable powersaving */
 	if (!fu_synaptics_rmi_device_disable_sleep (self, error)) {

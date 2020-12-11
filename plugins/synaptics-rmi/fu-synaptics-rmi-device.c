@@ -14,7 +14,7 @@
 #include "fu-synaptics-rmi-v6-device.h"
 #include "fu-synaptics-rmi-v7-device.h"
 
-#define RMI_DEVICE_MAX_PAGE				0xff
+#define RMI_DEVICE_MAX_PAGE				0x1
 #define RMI_DEVICE_PAGE_SIZE				0x100
 #define RMI_DEVICE_PAGE_SCAN_START			0x00e9
 #define RMI_DEVICE_PAGE_SCAN_END			0x0005
@@ -170,6 +170,7 @@ fu_synaptics_rmi_device_set_page (FuSynapticsRmiDevice *self, guint8 page, GErro
 gboolean
 fu_synaptics_rmi_device_reset (FuSynapticsRmiDevice *self, GError **error)
 {
+	g_debug ("reset device");
 	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
 	g_autoptr(GByteArray) req = g_byte_array_new ();
 
@@ -177,6 +178,7 @@ fu_synaptics_rmi_device_reset (FuSynapticsRmiDevice *self, GError **error)
 	if (!fu_synaptics_rmi_device_write (self, priv->f01->command_base, req, error))
 		return FALSE;
 	g_usleep (1000 * RMI_F01_DEFAULT_RESET_DELAY_MS);
+	g_debug ("reset device complete");
 	return TRUE;
 }
 
@@ -590,6 +592,14 @@ fu_synaptics_rmi_device_wait_for_attr (FuSynapticsRmiDevice *self,
 }
 
 gboolean
+fu_synaptics_rmi_device_enter_rmi_backdoor (FuSynapticsRmiDevice *self,
+				       GError **error)
+{
+	FuSynapticsRmiDeviceClass *klass_rmi = FU_SYNAPTICS_RMI_DEVICE_GET_CLASS (self);
+	return klass_rmi->enter_rmi_backdoor (self, error);
+}
+
+gboolean
 fu_synaptics_rmi_device_wait_for_idle (FuSynapticsRmiDevice *self,
 				       guint timeout_ms,
 				       RmiDeviceWaitForIdleFlags flags,
@@ -619,11 +629,14 @@ fu_synaptics_rmi_device_wait_for_idle (FuSynapticsRmiDevice *self,
 		return TRUE;
 	}
 
+	g_debug ("pass wait for attr");
+
 	/* if for some reason we are not getting attention reports for HID devices
 	 * then we can still continue after the timeout and read F34 status
 	 * but if we have to wait for the timeout to ellapse every time then this
 	 * will be slow */
 	if (priv->f34->function_version == 0x1) {
+		g_debug ("f34 : 1");
 		res = fu_synaptics_rmi_device_read (self, priv->flash.status_addr, 0x2, error);
 		if (res == NULL)
 			return FALSE;
@@ -631,6 +644,7 @@ fu_synaptics_rmi_device_wait_for_idle (FuSynapticsRmiDevice *self,
 		f34_status = res->data[1] & RMI_F34_STATUS_V1_MASK;
 		f34_enabled = !!(res->data[1] & RMI_F34_ENABLED_MASK);
 	} else {
+		g_debug ("f34 : 0");
 		res = fu_synaptics_rmi_device_read (self, priv->flash.status_addr, 0x1, error);
 		if (res == NULL)
 			return FALSE;
@@ -638,6 +652,10 @@ fu_synaptics_rmi_device_wait_for_idle (FuSynapticsRmiDevice *self,
 		f34_status = (res->data[0] >> RMI_F34_STATUS_SHIFT) & RMI_F34_STATUS_MASK;
 		f34_enabled = !!(res->data[0] & RMI_F34_ENABLED_MASK);
 	}
+
+	g_debug ("f34_status : %d", f34_status);
+	g_debug ("f34_command : %d", f34_command);
+	g_debug ("f34_enabled : %d", f34_enabled);
 
 	/* is idle */
 	if (f34_status == 0x0 && f34_command == 0x0) {
@@ -648,6 +666,7 @@ fu_synaptics_rmi_device_wait_for_idle (FuSynapticsRmiDevice *self,
 					     "idle but enabled unset");
 			return FALSE;
 		}
+		g_debug ("fu_synaptics_rmi_device_wait_for_idle return true");
 		return TRUE;
 	}
 
