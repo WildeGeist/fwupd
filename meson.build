@@ -117,7 +117,8 @@ link_language = get_option('link_language')
 if link_language != 'c'
   add_languages(link_language)
 endif
-if get_option('fuzzing_engine').startswith('-fsanitize=fuzzer')
+fuzzing_link_args = get_option('fuzzing_link_args')
+if fuzzing_link_args.startswith('-fsanitize=fuzzer')
   add_project_arguments('-fsanitize=fuzzer-no-link', language : 'c')
 endif
 
@@ -197,6 +198,12 @@ endif
 mandir = join_paths(prefix, get_option('mandir'))
 localedir = join_paths(prefix, get_option('localedir'))
 
+# installed fuzzing targets
+fuzzing_install_dir = get_option('fuzzing_install_dir')
+if fuzzing_install_dir == ''
+  fuzzing_install_dir = installed_test_bindir
+endif
+
 diffcmd = find_program('diff')
 gio = dependency('gio-2.0', version : '>= 2.45.8')
 giounix = dependency('gio-unix-2.0', version : '>= 2.45.8', required: false)
@@ -257,6 +264,28 @@ if get_option('default_library') != 'static'
   if host_machine.system() == 'windows'
     platform_deps += cc.find_library('shlwapi')
   endif
+endif
+
+# the fuzzer builds one big static blob
+fuzzing_static_deps = get_option('fuzzing_static_deps')
+if fuzzing_static_deps
+  giounix_static = dependency('gio-unix-2.0', version : '>= 2.45.8', required: false, static : true)
+  libxmlb_static = dependency('xmlb', version : '>= 0.1.13', fallback : ['libxmlb', 'libxmlb_dep'], static : true)
+  gusb_static = dependency('gusb', version : '>= 0.3.5', fallback : ['gusb', 'gusb_dep'], static : true)
+  libarchive_static = dependency('libarchive', static : true)
+  fuzzer_deps = [
+    giounix_static,
+    gusb_static,
+    libarchive_static,
+    libxmlb_static,
+  ]
+else
+  fuzzer_deps = [
+    giounix,
+    gusb,
+    libarchive,
+    libxmlb,
+  ]
 endif
 
 if valgrind.found()
