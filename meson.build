@@ -205,8 +205,9 @@ if fuzzing_install_dir == ''
 endif
 
 diffcmd = find_program('diff')
-gio = dependency('gio-2.0', version : '>= 2.45.8')
-giounix = dependency('gio-unix-2.0', version : '>= 2.45.8', required: false)
+fuzzing_static_deps = get_option('fuzzing_static_deps')
+gio = dependency('gio-2.0', version : '>= 2.45.8', static : fuzzing_static_deps)
+giounix = dependency('gio-unix-2.0', version : '>= 2.45.8', required: false, static : fuzzing_static_deps)
 if giounix.found()
   conf.set('HAVE_GIO_UNIX', '1')
 endif
@@ -214,22 +215,22 @@ if gio.version().version_compare ('>= 2.55.0')
   conf.set('HAVE_GIO_2_55_0', '1')
 endif
 if build_standalone
-gmodule = dependency('gmodule-2.0')
+gmodule = dependency('gmodule-2.0', static : fuzzing_static_deps)
 if get_option('gudev')
   gudev = dependency('gudev-1.0', version : '>= 232')
   conf.set('HAVE_GUDEV', '1')
 else
   gudev = dependency('', required : false)
 endif
-libxmlb = dependency('xmlb', version : '>= 0.1.13', fallback : ['libxmlb', 'libxmlb_dep'])
+libxmlb = dependency('xmlb', version : '>= 0.1.13', fallback : ['libxmlb', 'libxmlb_dep'], static : fuzzing_static_deps)
 gusb = dependency('gusb', version : '>= 0.3.5', fallback : ['gusb', 'gusb_dep'])
 sqlite = dependency('sqlite3')
-libarchive = dependency('libarchive')
+libarchive = dependency('libarchive', static : fuzzing_static_deps)
 endif
-libjcat = dependency('jcat', version : '>= 0.1.0', fallback : ['libjcat', 'libjcat_dep'])
-libjsonglib = dependency('json-glib-1.0', version : '>= 1.1.1')
+libjcat = dependency('jcat', version : '>= 0.1.0', fallback : ['libjcat', 'libjcat_dep'], static : fuzzing_static_deps)
+libjsonglib = dependency('json-glib-1.0', version : '>= 1.1.1', static : fuzzing_static_deps)
 valgrind = dependency('valgrind', required: false)
-libcurl = dependency('libcurl', version : '>= 7.47.0')
+libcurl = dependency('libcurl', version : '>= 7.47.0', static : fuzzing_static_deps)
 if libcurl.version().version_compare('>= 7.56.0')
   conf.set('HAVE_LIBCURL_7_56_0', '1')
 endif
@@ -254,7 +255,7 @@ if build_daemon
   endif
 endif
 libm = cc.find_library('m', required: false)
-libgcab = dependency('libgcab-1.0', version : '>= 1.0', fallback : ['gcab', 'gcab_dep'])
+libgcab = dependency('libgcab-1.0', version : '>= 1.0', fallback : ['gcab', 'gcab_dep'], static : fuzzing_static_deps)
 gcab = find_program('gcab', required : get_option('tests'))
 bashcomp = dependency('bash-completion', required: false)
 python3 = find_program('python3')
@@ -264,28 +265,6 @@ if get_option('default_library') != 'static'
   if host_machine.system() == 'windows'
     platform_deps += cc.find_library('shlwapi')
   endif
-endif
-
-# the fuzzer builds one big static blob
-fuzzing_static_deps = get_option('fuzzing_static_deps')
-if fuzzing_static_deps
-  giounix_static = dependency('gio-unix-2.0', version : '>= 2.45.8', required: false, static : true)
-  libxmlb_static = dependency('xmlb', version : '>= 0.1.13', fallback : ['libxmlb', 'libxmlb_dep'], static : true)
-  gusb_static = dependency('gusb', version : '>= 0.3.5', fallback : ['gusb', 'gusb_dep'], static : true)
-  libarchive_static = dependency('libarchive', static : true)
-  fuzzer_deps = [
-    giounix_static,
-    gusb_static,
-    libarchive_static,
-    libxmlb_static,
-  ]
-else
-  fuzzer_deps = [
-    giounix,
-    gusb,
-    libarchive,
-    libxmlb,
-  ]
 endif
 
 if valgrind.found()

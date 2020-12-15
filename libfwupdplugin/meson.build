@@ -289,7 +289,7 @@ executable(
     fwupdplugin_incdir,
   ],
   dependencies : [
-    fuzzer_deps,
+    library_deps,
   ],
   link_with : [
     fwupd,
