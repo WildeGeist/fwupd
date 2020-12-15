@@ -29,7 +29,7 @@ fu_synaptics_rmi_ps2_device_read_ack (FuSynapticsRmiPs2Device *self,
 	for(guint i = 0 ; i < 60; i++) {
 		g_autoptr(GError) error_local = NULL;
 		if (!fu_io_channel_read_raw (self->io_channel, pbuf, 0x1,
-					     NULL, 60,
+					     NULL, 5,
 					     FU_IO_CHANNEL_FLAG_NONE,
 					     &error_local)) {
 			if (g_error_matches (error_local, G_IO_ERROR, G_IO_ERROR_TIMED_OUT)) {
@@ -83,31 +83,40 @@ fu_synaptics_rmi_ps2_device_write_byte (FuSynapticsRmiPs2Device *self,
 		}
 		do_write = FALSE;
 
-		/* attempt to read acknowledge... */
-		if (!fu_synaptics_rmi_ps2_device_read_ack (self, &res, &error_local)) {
-			if (i > 3) {
-				g_propagate_prefixed_error (error,
+		for (;;) {
+			/* attempt to read acknowledge... */
+			if (!fu_synaptics_rmi_ps2_device_read_ack (self, &res, &error_local)) {
+				if (i > 3) {
+					g_propagate_prefixed_error (error,
 							    g_steal_pointer (&error_local),
 							    "read ack failed: ");
-				return FALSE;
+					return FALSE;
+				}
+				g_warning ("read ack failed: %s, retrying", error_local->message);
+				break;
 			}
-			g_warning ("read ack failed: %s, retrying", error_local->message);
-			continue;
-		}
-		if (res == edpsAcknowledge)
-			break;
-		if (res == edpsResend) {
-			do_write = TRUE;
-			g_usleep (G_USEC_PER_SEC);
-			continue;
-		}
-		if (res == edpsError) {
-			do_write = TRUE;
+
+			if (res == edpsAcknowledge)
+				return TRUE;
+				
+			if (res == edpsResend) {
+				do_write = TRUE;
+				g_debug ("resend");
+				g_usleep (G_USEC_PER_SEC);
+				break;
+			}
+			if (res == edpsError) {
+				do_write = TRUE;
+				g_debug ("error");
+				g_usleep (1000 * 10);
+				break;
+			}
+			g_debug ("other response : 0x%x", res);
 			g_usleep (1000 * 10);
-			continue;
 		}
-		g_debug ("other response : 0x%x", res);
-		g_usleep (1000 * 10);
+		if (i >= 3) {
+			break;
+		}
 	}
 
 	/* success */
@@ -405,7 +414,7 @@ fu_synaptics_rmi_ps2_device_read_rmi_register (FuSynapticsRmiPs2Device *self,
 	}
 	for (guint i = 0; i < 3; i++) {
 		guint8 tmp = 0;
-		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 500, error)) {
+		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 10, error)) {
 			g_prefix_error (error, "failed to read byte %u: ", i);
 			return FALSE;
 		}
@@ -444,7 +453,7 @@ fu_synaptics_rmi_ps2_device_read_rmi_packet_register (FuSynapticsRmiPs2Device *s
 	}
 	for (guint i = 0; i < req_sz; ++i) {
 		guint8 tmp = 0;
-		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 50, error)) {
+		if (!fu_synaptics_rmi_ps2_device_read_byte (self, &tmp, 10, error)) {
 			g_prefix_error (error, "failed to read byte %u: ", i);
 			return NULL;
 		}
@@ -459,8 +468,24 @@ static gboolean
 fu_synaptics_rmi_ps2_device_query_status (FuSynapticsRmiDevice *rmi_device,
 					  GError **error)
 {
-	/* this doesn't work in PS/2 mode */
-	return TRUE;
+	FuSynapticsRmiFunction *f34;
+	g_debug ("ps2 query status");
+	f34 = fu_synaptics_rmi_device_get_function (rmi_device, 0x34, error);
+	if (f34 == NULL)
+		return FALSE;
+	if (f34->function_version == 0x0 ||
+	    f34->function_version == 0x1) {
+		return fu_synaptics_rmi_v5_device_query_status (rmi_device, error);
+	}
+	if (f34->function_version == 0x2) {
+		return fu_synaptics_rmi_v7_device_query_status (rmi_device, error);
+	}
+	g_set_error (error,
+		     FWUPD_ERROR,
+		     FWUPD_ERROR_NOT_SUPPORTED,
+		     "f34 function version 0x%02x unsupported",
+		     f34->function_version);
+	return FALSE;
 }
 
 static gboolean
@@ -490,6 +515,7 @@ fu_synaptics_rmi_ps2_device_read (FuSynapticsRmiDevice *rmi_device,
 	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (rmi_device);
 	g_autoptr(GByteArray) buf = NULL;
 	gboolean isPacketRegister = FALSE; //FIXME?! How do we know?!
+	g_autofree gchar *dump = NULL;
 
 	if (!fu_synaptics_rmi_device_set_page (rmi_device,
 					       addr >> 8,
@@ -525,8 +551,9 @@ fu_synaptics_rmi_ps2_device_read (FuSynapticsRmiDevice *rmi_device,
 			fu_byte_array_append_uint8 (buf, tmp);
 		}
 	}
+	dump = g_strdup_printf ("R %x", addr);
 	if (g_getenv ("FWUPD_SYNAPTICS_RMI_VERBOSE") != NULL) {
-		fu_common_dump_full (G_LOG_DOMAIN, "PS2DeviceRead",
+		fu_common_dump_full (G_LOG_DOMAIN, dump,
 				     buf->data, buf->len,
 				     80, FU_DUMP_FLAGS_NONE);
 	}
@@ -541,6 +568,7 @@ fu_synaptics_rmi_ps2_device_write (FuSynapticsRmiDevice *rmi_device,
 {
 	FuSynapticsRmiPs2Device *self = FU_SYNAPTICS_RMI_PS2_DEVICE (rmi_device);
 	guint32 timeout = 999; //FIXME
+	g_autofree gchar *dump = NULL;
 	if (!fu_synaptics_rmi_device_set_page (rmi_device,
 					       addr >> 8,
 					       error)) {
@@ -556,6 +584,30 @@ fu_synaptics_rmi_ps2_device_write (FuSynapticsRmiDevice *rmi_device,
 		g_prefix_error (error,
 				"failed to write register %x: ",
 				addr);
+		return FALSE;
+	}
+	dump = g_strdup_printf ("W %x", addr);
+	if (g_getenv ("FWUPD_SYNAPTICS_RMI_VERBOSE") != NULL) {
+		fu_common_dump_full (G_LOG_DOMAIN, dump,
+				     req->data, req->len,
+				     80, FU_DUMP_FLAGS_NONE);
+	}
+	return TRUE;
+}
+
+static gboolean
+fu_synaptics_rmi_ps2_device_write_bus_select (FuSynapticsRmiDevice *rmi_device,
+				      guint8 bus,
+				      GError **error)
+{
+	g_autoptr(GByteArray) req = g_byte_array_new ();
+	fu_byte_array_append_uint8 (req, bus);
+	g_debug ("ps2 write bus select");
+	if (!fu_synaptics_rmi_ps2_device_write (rmi_device,
+				RMI_DEVICE_BUS_SELECT_REGISTER,
+				req,
+				error)) {
+		g_prefix_error (error, "failed to write rmi register %u: ", bus);
 		return FALSE;
 	}
 	return TRUE;
@@ -649,15 +701,22 @@ fu_synaptics_rmi_device_detach_v5 (FuDevice *device, GError **error)
 	FuSynapticsRmiFlash *flash = fu_synaptics_rmi_device_get_flash (self);
 	g_autoptr(GByteArray) enable_req = g_byte_array_new ();
 
+	g_debug ("PS2 detach v5");
+
 	/* sanity check */
-	if (!fu_device_has_flag (device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
-		g_debug ("already in runtime mode, skipping");
+	if (fu_device_has_flag (device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
+		g_debug ("already in bootloader mode, skipping");
 		return TRUE;
 	}
 
 	/* disable interrupts */
 	if (!fu_synaptics_rmi_device_disable_irqs (self, error))
 		return FALSE;
+
+	if (!fu_synaptics_rmi_ps2_device_write_bus_select (self, 0, error)) {
+		g_prefix_error (error, "failed to write buse select: ");
+		return FALSE;
+	}
 
 	/* unlock bootloader and rebind kernel driver */
 	if (!fu_synaptics_rmi_device_write_bootloader_id (self, error))
@@ -671,7 +730,6 @@ fu_synaptics_rmi_device_detach_v5 (FuDevice *device, GError **error)
 		return FALSE;
 	}
 
-	fu_device_set_status (device, FWUPD_STATUS_DEVICE_RESTART);
 	g_usleep (1000 * RMI_F34_ENABLE_WAIT_MS);
 	return TRUE;
 }
@@ -764,15 +822,21 @@ fu_synaptics_rmi_ps2_device_detach (FuDevice *device, GError **error)
 			     f34->function_version);
 		return FALSE;
 	}
-
+	
 	if (!fu_synaptics_rmi_device_enter_backdoor (self, error)){
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
+		return FALSE;
+	}
+
+	if (!fu_synaptics_rmi_ps2_device_query_status (self, error)) {
+		g_prefix_error (error, "failed to query status after detach: ");
 		return FALSE;
 	}
 
 	/* success */
 	return TRUE;
 }
+
 
 static gboolean
 fu_synaptics_rmi_ps2_device_setup (FuDevice *device, GError **error)
@@ -794,11 +858,22 @@ fu_synaptics_rmi_ps2_device_attach (FuDevice *device, GError **error)
 		g_debug ("already in runtime mode, skipping");
 		return TRUE;
 	}
+	
+	if (!fu_synaptics_rmi_device_enter_backdoor (rmi_device, error)){
+		g_prefix_error (error, "failed to enable RMI backdoor: ");
+		return FALSE;
+	}
 
 	/* reset device */
-	if (!fu_synaptics_rmi_device_reset (rmi_device, error))
+	if (!fu_synaptics_rmi_device_reset (rmi_device, error)) {
+		g_prefix_error (error, "failed to reset device: ");
 		return FALSE;
+	}
 
+	g_usleep (1000 * 5000);
+
+	fu_device_set_status (device, FWUPD_STATUS_DEVICE_RESTART);
+		
 	/* back to psmouse */
 	if (!fu_udev_device_write_sysfs (FU_UDEV_DEVICE (device),
 					 "drvctl", "psmouse", error)) {
@@ -863,4 +938,5 @@ fu_synaptics_rmi_ps2_device_class_init (FuSynapticsRmiPs2DeviceClass *klass)
 	klass_rmi->query_product_sub_id = fu_synaptics_rmi_ps2_device_query_product_sub_id;
 	klass_rmi->wait_for_attr = fu_synaptics_rmi_ps2_device_wait_for_attr;
 	klass_rmi->enter_backdoor = fu_synaptics_rmi_ps2_device_enter_backdoor;
+	klass_rmi->write_bus_select = fu_synaptics_rmi_ps2_device_write_bus_select;
 }

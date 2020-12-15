@@ -378,6 +378,15 @@ fu_synaptics_rmi_hid_device_rebind_driver (FuSynapticsRmiDevice *self, GError **
 }
 
 static gboolean
+fu_synaptics_rmi_hid_device_write_bus_select (FuSynapticsRmiDevice *rmi_device,
+				      guint8 bus,
+				      GError **error)
+{
+	/* Nothing to do for HID */
+	return TRUE;
+}
+
+static gboolean
 fu_synaptics_rmi_device_detach_v5 (FuDevice *device, GError **error)
 {
 	FuSynapticsRmiDevice *self = FU_SYNAPTICS_RMI_DEVICE (device);
@@ -385,8 +394,8 @@ fu_synaptics_rmi_device_detach_v5 (FuDevice *device, GError **error)
 	g_autoptr(GByteArray) enable_req = g_byte_array_new ();
 
 	/* sanity check */
-	if (!fu_device_has_flag (device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
-		g_debug ("already in runtime mode, skipping");
+	if (fu_device_has_flag (device, FWUPD_DEVICE_FLAG_IS_BOOTLOADER)) {
+		g_debug ("already in bootloader mode, skipping");
 		return TRUE;
 	}
 
@@ -571,4 +580,5 @@ fu_synaptics_rmi_hid_device_class_init (FuSynapticsRmiHidDeviceClass *klass)
 	klass_rmi->wait_for_attr = fu_synaptics_rmi_hid_device_wait_for_attr;
 	klass_rmi->set_page = fu_synaptics_rmi_hid_device_set_page;
 	klass_rmi->query_status = fu_synaptics_rmi_hid_device_query_status;
+	klass_rmi->write_bus_select = fu_synaptics_rmi_hid_device_write_bus_select;
 }

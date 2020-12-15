@@ -221,7 +221,7 @@ fu_synaptics_rmi_v5_device_setup (FuSynapticsRmiDevice *self, GError **error)
 {
 	FuSynapticsRmiFunction *f34;
 	FuSynapticsRmiFlash *flash = fu_synaptics_rmi_device_get_flash (self);
-	guint16 flash_properties2 = 0;
+	guint8 flash_properties2 = 0;
 	g_autoptr(GByteArray) f34_data0 = NULL;
 	g_autoptr(GByteArray) f34_data2 = NULL;
 	g_autoptr(GByteArray) buf_flash_properties2 = NULL;
@@ -245,11 +245,10 @@ fu_synaptics_rmi_v5_device_setup (FuSynapticsRmiDevice *self, GError **error)
 		g_prefix_error (error, "failed to read Flash Properties 2: ");
 		return FALSE;
 	}
-	if (!fu_common_read_uint16_safe (buf_flash_properties2->data,
+	if (!fu_common_read_uint8_safe (buf_flash_properties2->data,
 					 buf_flash_properties2->len,
 					 0x0, /* offset */
 					 &flash_properties2,
-					 G_LITTLE_ENDIAN,
 					 error)) {
 		g_prefix_error (error, "failed to parse Flash Properties 2: ");
 		return FALSE;
@@ -297,7 +296,6 @@ fu_synaptics_rmi_v5_device_query_status (FuSynapticsRmiDevice *self, GError **er
 {
 	FuSynapticsRmiFunction *f01;
 	g_autoptr(GByteArray) f01_db = NULL;
-
 	/* f01 */
 	f01 = fu_synaptics_rmi_device_get_function (self, 0x01, error);
 	if (f01 == NULL)
@@ -308,8 +306,10 @@ fu_synaptics_rmi_v5_device_query_status (FuSynapticsRmiDevice *self, GError **er
 		return FALSE;
 	}
 	if (f01_db->data[0] & 0x40) {
+		g_debug ("in bootloader mode add FWUPD_DEVICE_FLAG_IS_BOOTLOADER");
 		fu_device_add_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_IS_BOOTLOADER);
 	} else {
+		g_debug ("not in bootloader mode remove FWUPD_DEVICE_FLAG_IS_BOOTLOADER");
 		fu_device_remove_flag (FU_DEVICE (self), FWUPD_DEVICE_FLAG_IS_BOOTLOADER);
 	}
 	return TRUE;

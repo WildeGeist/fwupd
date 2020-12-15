@@ -42,6 +42,9 @@ struct _FuSynapticsRmiDeviceClass
 								 GError			**error);
 	gboolean		 (*enter_backdoor)		(FuSynapticsRmiDevice	 *self,
 								 GError			**error);
+	gboolean		 (*write_bus_select)		(FuSynapticsRmiDevice	 *self,
+								 guint8			 bus,
+								 GError			**error);
 };
 
 typedef struct {
@@ -65,6 +68,7 @@ typedef struct {
 #define RMI_F34_IDLE_WAIT_MS				500		/* ms */
 
 #define RMI_DEVICE_PAGE_SELECT_REGISTER			0xff
+#define RMI_DEVICE_BUS_SELECT_REGISTER			0xfe
 
 typedef enum {
 	RMI_DEVICE_WAIT_FOR_IDLE_FLAG_NONE		= 0,
@@ -110,3 +114,6 @@ void			 fu_synaptics_rmi_device_set_max_page	(FuSynapticsRmiDevice	*self,
 guint8			 fu_synaptics_rmi_device_get_max_page	(FuSynapticsRmiDevice	*self);
 gboolean		 fu_synaptics_rmi_device_enter_backdoor	(FuSynapticsRmiDevice	*self,
 								 GError			**error);
+gboolean		 fu_synaptics_rmi_device_write_bus_select (FuSynapticsRmiDevice *self, 
+								 guint8 bus, 
+								 GError **error);

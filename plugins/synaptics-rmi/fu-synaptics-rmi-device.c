@@ -170,6 +170,13 @@ fu_synaptics_rmi_device_set_page (FuSynapticsRmiDevice *self, guint8 page, GErro
 }
 
 gboolean
+fu_synaptics_rmi_device_write_bus_select (FuSynapticsRmiDevice *self, guint8 bus, GError **error)
+{
+	FuSynapticsRmiDeviceClass *klass_rmi = FU_SYNAPTICS_RMI_DEVICE_GET_CLASS (self);
+	return klass_rmi->write_bus_select (self, bus, error);
+}
+
+gboolean
 fu_synaptics_rmi_device_reset (FuSynapticsRmiDevice *self, GError **error)
 {
 	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
@@ -177,8 +184,10 @@ fu_synaptics_rmi_device_reset (FuSynapticsRmiDevice *self, GError **error)
 
 	g_debug ("reset device");
 	fu_byte_array_append_uint8 (req, RMI_F01_CMD_DEVICE_RESET);
-	if (!fu_synaptics_rmi_device_write (self, priv->f01->command_base, req, error))
+	if (!fu_synaptics_rmi_device_write (self, priv->f01->command_base, req, error)) {
+		g_prefix_error (error, "failed to write 0x1 on F01 cb: ");
 		return FALSE;
+	}
 	g_usleep (1000 * RMI_F01_DEFAULT_RESET_DELAY_MS);
 	g_debug ("reset device complete");
 	return TRUE;
@@ -738,6 +747,8 @@ fu_synaptics_rmi_device_disable_irqs (FuSynapticsRmiDevice *self, GError **error
 {
 	FuSynapticsRmiDevicePrivate *priv = GET_PRIVATE (self);
 	g_autoptr(GByteArray) interrupt_disable_req = g_byte_array_new ();
+
+	g_debug ("F01 control base : 0x%x", priv->f01->control_base);
 
 	fu_byte_array_append_uint8 (interrupt_disable_req,
 				    priv->f34->interrupt_mask | priv->f01->interrupt_mask);
