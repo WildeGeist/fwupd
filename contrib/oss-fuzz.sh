@@ -27,10 +27,8 @@ if [ ! -f "/usr/bin/gcab" ]; then
 	libarchive-dev \
 	libattr1-dev \
 	libbz2-dev \
-	libcurl4-gnutls-dev \
 	libffi-dev \
 	libglib2.0-dev \
-	libgnutls-dev \
 	libicu-dev \
 	libjson-glib-dev \
 	libkrb5-dev \

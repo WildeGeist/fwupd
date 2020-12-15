@@ -9,7 +9,9 @@
 #include <glib-object.h>
 #include <gio/gio.h>
 #include <gmodule.h>
+#ifdef HAVE_CURL
 #include <curl/curl.h>
+#endif
 #ifdef HAVE_GIO_UNIX
 #include <gio/gunixfdlist.h>
 #endif
@@ -64,11 +66,13 @@ typedef struct {
 } FwupdClientPrivate;
 
 typedef struct {
+#ifdef HAVE_CURL
 	CURL				*curl;
 #ifdef HAVE_LIBCURL_7_56_0
 	curl_mime			*mime;
 #endif
 	struct curl_slist		*headers;
+#endif
 } FwupdCurlHelper;
 
 enum {
@@ -106,6 +110,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(CURLU, curl_url_cleanup)
 static void
 fwupd_client_curl_helper_free (FwupdCurlHelper *helper)
 {
+#ifdef HAVE_CURL
 	if (helper->curl != NULL)
 		curl_easy_cleanup (helper->curl);
 #ifdef HAVE_LIBCURL_7_56_0
@@ -114,6 +119,7 @@ fwupd_client_curl_helper_free (FwupdCurlHelper *helper)
 #endif
 	if (helper->headers != NULL)
 		curl_slist_free_all (helper->headers);
+#endif
 	g_free (helper);
 }
 
@@ -361,6 +367,7 @@ fwupd_client_ensure_networking (FwupdClient *self, GError **error)
 	return TRUE;
 }
 
+#ifdef HAVE_CURL
 static int
 fwupd_client_progress_callback_cb (void *clientp,
 				   curl_off_t dltotal,
@@ -430,6 +437,7 @@ fwupd_client_curl_new (FwupdClient *self, GError **error)
 	curl_easy_setopt (helper->curl, CURLOPT_HTTP_CONTENT_DECODING, 0L);
 	return g_steal_pointer (&helper);
 }
+#endif
 
 static void
 fwupd_client_connect_get_proxy_cb (GObject *source,
@@ -4054,6 +4062,7 @@ fwupd_client_download_write_callback_cb (char *ptr, size_t size, size_t nmemb, v
 	return realsize;
 }
 
+#ifdef HAVE_CURL
 static void
 fwupd_client_download_bytes_thread_cb (GTask *task,
 				       gpointer source_object,
@@ -4102,6 +4111,7 @@ fwupd_client_download_bytes_thread_cb (GTask *task,
 			       g_byte_array_free_to_bytes (g_steal_pointer (&buf)),
 			       (GDestroyNotify) g_bytes_unref);
 }
+#endif
 
 /**
  * fwupd_client_download_bytes_async:
@@ -4140,6 +4150,7 @@ fwupd_client_download_bytes_async (FwupdClient *self,
 
 	/* ensure networking set up */
 	task = g_task_new (self, cancellable, callback, callback_data);
+#ifdef HAVE_CURL
 	helper = fwupd_client_curl_new (self, &error);
 	if (helper == NULL) {
 		g_task_return_error (task, g_steal_pointer (&error));
@@ -4152,6 +4163,12 @@ fwupd_client_download_bytes_async (FwupdClient *self,
 	g_debug ("downloading %s", url);
 	fwupd_client_set_status (self, FWUPD_STATUS_DOWNLOADING);
 	g_task_run_in_thread (task, fwupd_client_download_bytes_thread_cb);
+#else
+	g_task_return_new_error (task,
+				 FWUPD_ERROR,
+				 FWUPD_ERROR_NOT_SUPPORTED,
+				 "no libcurl support");
+#endif
 }
 
 /**
@@ -4175,6 +4192,7 @@ fwupd_client_download_bytes_finish (FwupdClient *self, GAsyncResult *res, GError
 	return g_task_propagate_pointer (G_TASK(res), error);
 }
 
+#ifdef HAVE_CURL
 static void
 fwupd_client_upload_bytes_thread_cb (GTask *task,
 				     gpointer source_object,
@@ -4216,6 +4234,7 @@ fwupd_client_upload_bytes_thread_cb (GTask *task,
 			       g_byte_array_free_to_bytes (g_steal_pointer (&buf)),
 			       (GDestroyNotify) g_bytes_unref);
 }
+#endif
 
 /**
  * fwupd_client_upload_bytes_async:
@@ -4258,6 +4277,7 @@ fwupd_client_upload_bytes_async (FwupdClient *self,
 
 	/* ensure networking set up */
 	task = g_task_new (self, cancellable, callback, callback_data);
+#ifdef HAVE_CURL
 	helper = fwupd_client_curl_new (self, &error);
 	if (helper == NULL) {
 		g_task_return_error (task, g_steal_pointer (&error));
@@ -4299,6 +4319,12 @@ fwupd_client_upload_bytes_async (FwupdClient *self,
 	curl_easy_setopt (helper->curl, CURLOPT_URL, url);
 	g_task_set_task_data (task, g_steal_pointer (&helper), (GDestroyNotify) fwupd_client_curl_helper_free);
 	g_task_run_in_thread (task, fwupd_client_upload_bytes_thread_cb);
+#else
+	g_task_return_new_error (task,
+				 FWUPD_ERROR,
+				 FWUPD_ERROR_NOT_SUPPORTED,
+				 "no libcurl support");
+#endif
 }
 
 /**
