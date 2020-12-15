@@ -9,7 +9,7 @@
 #include <glib-object.h>
 #include <gio/gio.h>
 #include <gmodule.h>
-#ifdef HAVE_CURL
+#ifdef HAVE_LIBCURL
 #include <curl/curl.h>
 #endif
 #ifdef HAVE_GIO_UNIX
@@ -66,7 +66,7 @@ typedef struct {
 } FwupdClientPrivate;
 
 typedef struct {
-#ifdef HAVE_CURL
+#ifdef HAVE_LIBCURL
 	CURL				*curl;
 #ifdef HAVE_LIBCURL_7_56_0
 	curl_mime			*mime;
@@ -110,7 +110,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(CURLU, curl_url_cleanup)
 static void
 fwupd_client_curl_helper_free (FwupdCurlHelper *helper)
 {
-#ifdef HAVE_CURL
+#ifdef HAVE_LIBCURL
 	if (helper->curl != NULL)
 		curl_easy_cleanup (helper->curl);
 #ifdef HAVE_LIBCURL_7_56_0
@@ -367,7 +367,7 @@ fwupd_client_ensure_networking (FwupdClient *self, GError **error)
 	return TRUE;
 }
 
-#ifdef HAVE_CURL
+#ifdef HAVE_LIBCURL
 static int
 fwupd_client_progress_callback_cb (void *clientp,
 				   curl_off_t dltotal,
@@ -390,11 +390,12 @@ fwupd_client_progress_callback_cb (void *clientp,
 
 	return 0;
 }
+#endif
 
 static FwupdCurlHelper *
 fwupd_client_curl_new (FwupdClient *self, GError **error)
 {
-#ifdef HAVE_CURL
+#ifdef HAVE_LIBCURL
 	FwupdClientPrivate *priv = GET_PRIVATE (self);
 	const gchar *http_proxy;
 	g_autoptr(FwupdCurlHelper) helper = g_new0 (FwupdCurlHelper, 1);
@@ -4060,6 +4061,7 @@ fwupd_client_set_user_agent_for_package (FwupdClient *self,
 	priv->user_agent = g_string_free (str, FALSE);
 }
 
+#ifdef HAVE_LIBCURL
 static size_t
 fwupd_client_download_write_callback_cb (char *ptr, size_t size, size_t nmemb, void *userdata)
 {
@@ -4069,7 +4071,6 @@ fwupd_client_download_write_callback_cb (char *ptr, size_t size, size_t nmemb, v
 	return realsize;
 }
 
-#ifdef HAVE_CURL
 static void
 fwupd_client_download_bytes_thread_cb (GTask *task,
 				       gpointer source_object,
@@ -4162,7 +4163,7 @@ fwupd_client_download_bytes_async (FwupdClient *self,
 		g_task_return_error (task, g_steal_pointer (&error));
 		return;
 	}
-#ifdef HAVE_CURL
+#ifdef HAVE_LIBCURL
 	curl_easy_setopt (helper->curl, CURLOPT_URL, url);
 	g_task_set_task_data (task, g_steal_pointer (&helper), (GDestroyNotify) fwupd_client_curl_helper_free);
 
@@ -4194,7 +4195,7 @@ fwupd_client_download_bytes_finish (FwupdClient *self, GAsyncResult *res, GError
 	return g_task_propagate_pointer (G_TASK(res), error);
 }
 
-#ifdef HAVE_CURL
+#ifdef HAVE_LIBCURL
 static void
 fwupd_client_upload_bytes_thread_cb (GTask *task,
 				     gpointer source_object,
@@ -4285,7 +4286,7 @@ fwupd_client_upload_bytes_async (FwupdClient *self,
 		return;
 	}
 
-#ifdef HAVE_CURL
+#ifdef HAVE_LIBCURL
 	/* build message */
 	if ((flags & FWUPD_CLIENT_UPLOAD_FLAG_ALWAYS_MULTIPART) > 0 ||
 	    signature != NULL) {

@@ -67,6 +67,7 @@ meson "$BUILD" \
 	--libdir=lib \
 	--default-library=static \
 	-Dagent=false \
+	-Dcurl=false \
 	-Db_lundef=false \
 	-Dbuild=standalone \
 	-Dconsolekit=false \
