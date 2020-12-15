@@ -107,6 +107,14 @@ library_deps = [
   platform_deps,
 ]
 
+# fix underlinking in Ubuntu 16.04...
+if fuzzing_static_deps
+  library_deps += dependency('libsasl2', static : true)
+  library_deps += dependency('libtasn1', static : true)
+  library_deps += dependency('gmp', static : true)
+  library_deps += dependency('nettle', static : true)
+endif
+
 fwupdplugin_mapfile = 'fwupdplugin.map'
 vflag = '-Wl,--version-script,@0@/@1@'.format(meson.current_source_dir(), fwupdplugin_mapfile)
 fwupdplugin = library(
