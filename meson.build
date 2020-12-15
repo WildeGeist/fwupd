@@ -228,7 +228,7 @@ sqlite = dependency('sqlite3')
 libarchive = dependency('libarchive', static : fuzzing_static_deps)
 endif
 libjcat = dependency('jcat', version : '>= 0.1.0', fallback : ['libjcat', 'libjcat_dep'], static : fuzzing_static_deps)
-libjsonglib = dependency('json-glib-1.0', version : '>= 1.1.1', static : fuzzing_static_deps)
+libjsonglib = dependency('json-glib-1.0', version : '>= 1.1.1', fallback : ['json-glib', 'json_glib_dep'], static : fuzzing_static_deps)
 valgrind = dependency('valgrind', required: false)
 if get_option('curl')
   libcurl = dependency('libcurl', version : '>= 7.47.0')

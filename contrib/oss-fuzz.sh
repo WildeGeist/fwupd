@@ -75,6 +75,10 @@ meson "$BUILD" \
 	-Dfuzzing_install_dir=$OUT \
 	-Dfuzzing_link_args=$LIB_FUZZING_ENGINE \
 	-Dfuzzing_static_deps=true \
+	-Djson-glib:introspection=disabled \
+	-Djson-glib:gtk_doc=disabled \
+	-Djson-glib:man=false \
+	-Djson-glib:tests=false \
 	-Dgcab:docs=false \
 	-Dgcab:introspection=false \
 	-Dgcab:tests=false \
