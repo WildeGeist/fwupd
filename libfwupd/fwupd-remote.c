@@ -6,7 +6,9 @@
 
 #include "config.h"
 
+#ifdef HAVE_CURL
 #include <curl/curl.h>
+#endif
 #include <jcat.h>
 
 #include "fwupd-deprecated.h"

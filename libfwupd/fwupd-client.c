@@ -394,6 +394,7 @@ fwupd_client_progress_callback_cb (void *clientp,
 static FwupdCurlHelper *
 fwupd_client_curl_new (FwupdClient *self, GError **error)
 {
+#ifdef HAVE_CURL
 	FwupdClientPrivate *priv = GET_PRIVATE (self);
 	const gchar *http_proxy;
 	g_autoptr(FwupdCurlHelper) helper = g_new0 (FwupdCurlHelper, 1);
@@ -436,8 +437,14 @@ fwupd_client_curl_new (FwupdClient *self, GError **error)
 	/* this disables the double-compression of the firmware.xml.gz file */
 	curl_easy_setopt (helper->curl, CURLOPT_HTTP_CONTENT_DECODING, 0L);
 	return g_steal_pointer (&helper);
-}
+#else
+	g_set_error_literal (error,
+			     FWUPD_ERROR,
+			     FWUPD_ERROR_NOT_SUPPORTED,
+			     "no libcurl support");
+	return FALSE;
 #endif
+}
 
 static void
 fwupd_client_connect_get_proxy_cb (GObject *source,
@@ -4150,12 +4157,12 @@ fwupd_client_download_bytes_async (FwupdClient *self,
 
 	/* ensure networking set up */
 	task = g_task_new (self, cancellable, callback, callback_data);
-#ifdef HAVE_CURL
 	helper = fwupd_client_curl_new (self, &error);
 	if (helper == NULL) {
 		g_task_return_error (task, g_steal_pointer (&error));
 		return;
 	}
+#ifdef HAVE_CURL
 	curl_easy_setopt (helper->curl, CURLOPT_URL, url);
 	g_task_set_task_data (task, g_steal_pointer (&helper), (GDestroyNotify) fwupd_client_curl_helper_free);
 
@@ -4163,11 +4170,6 @@ fwupd_client_download_bytes_async (FwupdClient *self,
 	g_debug ("downloading %s", url);
 	fwupd_client_set_status (self, FWUPD_STATUS_DOWNLOADING);
 	g_task_run_in_thread (task, fwupd_client_download_bytes_thread_cb);
-#else
-	g_task_return_new_error (task,
-				 FWUPD_ERROR,
-				 FWUPD_ERROR_NOT_SUPPORTED,
-				 "no libcurl support");
 #endif
 }
 
@@ -4277,13 +4279,13 @@ fwupd_client_upload_bytes_async (FwupdClient *self,
 
 	/* ensure networking set up */
 	task = g_task_new (self, cancellable, callback, callback_data);
-#ifdef HAVE_CURL
 	helper = fwupd_client_curl_new (self, &error);
 	if (helper == NULL) {
 		g_task_return_error (task, g_steal_pointer (&error));
 		return;
 	}
 
+#ifdef HAVE_CURL
 	/* build message */
 	if ((flags & FWUPD_CLIENT_UPLOAD_FLAG_ALWAYS_MULTIPART) > 0 ||
 	    signature != NULL) {
