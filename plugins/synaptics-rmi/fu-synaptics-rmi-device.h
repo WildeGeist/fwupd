@@ -114,6 +114,6 @@ void			 fu_synaptics_rmi_device_set_max_page	(FuSynapticsRmiDevice	*self,
 guint8			 fu_synaptics_rmi_device_get_max_page	(FuSynapticsRmiDevice	*self);
 gboolean		 fu_synaptics_rmi_device_enter_backdoor	(FuSynapticsRmiDevice	*self,
 								 GError			**error);
-gboolean		 fu_synaptics_rmi_device_write_bus_select (FuSynapticsRmiDevice *self, 
-								 guint8 bus, 
-								 GError **error);
+gboolean		 fu_synaptics_rmi_device_write_bus_select (FuSynapticsRmiDevice *self,
+								 guint8			 bus,
+								 GError			**error);

@@ -95,10 +95,8 @@ fu_synaptics_rmi_ps2_device_write_byte (FuSynapticsRmiPs2Device *self,
 				g_warning ("read ack failed: %s, retrying", error_local->message);
 				break;
 			}
-
 			if (res == edpsAcknowledge)
 				return TRUE;
-				
 			if (res == edpsResend) {
 				do_write = TRUE;
 				g_debug ("resend");
@@ -597,16 +595,16 @@ fu_synaptics_rmi_ps2_device_write (FuSynapticsRmiDevice *rmi_device,
 
 static gboolean
 fu_synaptics_rmi_ps2_device_write_bus_select (FuSynapticsRmiDevice *rmi_device,
-				      guint8 bus,
-				      GError **error)
+					      guint8 bus,
+					      GError **error)
 {
 	g_autoptr(GByteArray) req = g_byte_array_new ();
 	fu_byte_array_append_uint8 (req, bus);
 	g_debug ("ps2 write bus select");
 	if (!fu_synaptics_rmi_ps2_device_write (rmi_device,
-				RMI_DEVICE_BUS_SELECT_REGISTER,
-				req,
-				error)) {
+						RMI_DEVICE_BUS_SELECT_REGISTER,
+						req,
+						error)) {
 		g_prefix_error (error, "failed to write rmi register %u: ", bus);
 		return FALSE;
 	}
@@ -822,7 +820,7 @@ fu_synaptics_rmi_ps2_device_detach (FuDevice *device, GError **error)
 			     f34->function_version);
 		return FALSE;
 	}
-	
+
 	if (!fu_synaptics_rmi_device_enter_backdoor (self, error)){
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
@@ -858,7 +856,7 @@ fu_synaptics_rmi_ps2_device_attach (FuDevice *device, GError **error)
 		g_debug ("already in runtime mode, skipping");
 		return TRUE;
 	}
-	
+
 	if (!fu_synaptics_rmi_device_enter_backdoor (rmi_device, error)){
 		g_prefix_error (error, "failed to enable RMI backdoor: ");
 		return FALSE;
@@ -873,7 +871,7 @@ fu_synaptics_rmi_ps2_device_attach (FuDevice *device, GError **error)
 	g_usleep (1000 * 5000);
 
 	fu_device_set_status (device, FWUPD_STATUS_DEVICE_RESTART);
-		
+
 	/* back to psmouse */
 	if (!fu_udev_device_write_sysfs (FU_UDEV_DEVICE (device),
 					 "drvctl", "psmouse", error)) {
