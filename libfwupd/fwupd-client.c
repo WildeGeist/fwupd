@@ -45,7 +45,8 @@ typedef GObject		*(*FwupdClientObjectNewFunc)	(void);
 static void fwupd_client_finalize	 (GObject *object);
 
 typedef struct {
-	GMainContext			*main_ctx;
+	GMainContext			*main_ctx_sync;
+	GMainContext			*main_ctx_prxy;
 	FwupdStatus			 status;
 	gboolean			 tainted;
 	gboolean			 interactive;
@@ -295,15 +296,15 @@ GMainContext *
 fwupd_client_get_main_context (FwupdClient *self)
 {
 	FwupdClientPrivate *priv = GET_PRIVATE (self);
-	if (priv->main_ctx != NULL)
-		return g_main_context_ref (priv->main_ctx);
+	if (priv->main_ctx_sync != NULL)
+		return g_main_context_ref (priv->main_ctx_sync);
 	return g_main_context_ref_thread_default ();
 }
 
 /**
  * fwupd_client_set_main_context:
  * @self: A #FwupdClient
- * @main_ctx: #GMainContext
+ * @main_ctx: (nullable): #GMainContext or %NULL
  *
  * Sets the internal #GMainContext to use for synchronous methods.
  *
@@ -313,9 +314,11 @@ void
 fwupd_client_set_main_context (FwupdClient *self, GMainContext *main_ctx)
 {
 	FwupdClientPrivate *priv = GET_PRIVATE (self);
-	if (main_ctx != priv->main_ctx)
-		g_main_context_unref (priv->main_ctx);
-	priv->main_ctx = g_main_context_ref (main_ctx);
+	if (main_ctx == priv->main_ctx_sync)
+		return;
+	g_clear_pointer (&priv->main_ctx_sync, g_main_context_unref);
+	if (main_ctx != NULL)
+		priv->main_ctx_sync = g_main_context_ref (main_ctx);
 }
 
 /**
@@ -491,6 +494,11 @@ fwupd_client_connect_get_bus_cb (GObject *source,
 		g_task_return_error (task, g_steal_pointer (&error));
 		return;
 	}
+
+	/* we want the GDBusProxy to emit signals in the thread default
+	 * main context of the thread which called fwupd_client_new()
+	 * not the first one that caused a fwupd_client_connect_async()... */
+	g_main_context_push_thread_default (priv->main_ctx_prxy);
 	g_dbus_proxy_new (priv->conn,
 			  G_DBUS_PROXY_FLAGS_NONE,
 			  NULL,
@@ -500,6 +508,7 @@ fwupd_client_connect_get_bus_cb (GObject *source,
 			  g_task_get_cancellable (task),
 			  fwupd_client_connect_get_proxy_cb,
 			  g_object_ref (task));
+	g_main_context_pop_thread_default (priv->main_ctx_prxy);
 }
 
 /**
@@ -2114,6 +2123,10 @@ fwupd_client_install_stream_async (FwupdClient *self,
  *
  * Install firmware onto a specific device.
  *
+ * NOTE: This method is thread-safe, but progress signals will be
+ * emitted in the thread default main context of the thread which
+ * called fwupd_client_new().
+ *
  * Since: 1.5.0
  **/
 void
@@ -2187,6 +2200,10 @@ fwupd_client_install_bytes_finish (FwupdClient *self, GAsyncResult *res, GError 
  * @callback_data: the data to pass to @callback
  *
  * Install firmware onto a specific device.
+ *
+ * NOTE: This method is thread-safe, but progress signals will be
+ * emitted in the thread default main context of the thread which
+ * called fwupd_client_new().
  *
  * Since: 1.5.0
  **/
@@ -2416,6 +2433,10 @@ fwupd_client_install_release_remote_cb (GObject *source, GAsyncResult *res, gpoi
  * @callback_data: the data to pass to @callback
  *
  * Installs a new release on a device, downloading the firmware if required.
+ *
+ * NOTE: This method is thread-safe, but progress signals will be
+ * emitted in the thread default main context of the thread which
+ * called fwupd_client_new().
  *
  * Since: 1.5.0
  **/
@@ -2845,6 +2866,10 @@ fwupd_client_update_metadata_stream_async (FwupdClient *self,
  * The @remote_id allows the firmware to be tagged so that the remote can be
  * matched when the firmware is downloaded.
  *
+ * NOTE: This method is thread-safe, but progress signals will be
+ * emitted in the thread default main context of the thread which
+ * called fwupd_client_new().
+ *
  * Since: 1.5.0
  **/
 void
@@ -3041,6 +3066,10 @@ fwupd_client_refresh_remote_signature_cb (GObject *source,
  * @callback_data: the data to pass to @callback
  *
  * Refreshes a remote by downloading new metadata.
+ *
+ * NOTE: This method is thread-safe, but progress signals will be
+ * emitted in the thread default main context of the thread which
+ * called fwupd_client_new().
  *
  * Since: 1.5.0
  **/
@@ -4118,6 +4147,10 @@ fwupd_client_download_bytes_thread_cb (GTask *task,
  * You must have called fwupd_client_connect_async() on @self before using
  * this method.
  *
+ * NOTE: This method is thread-safe, but progress signals will be
+ * emitted in the thread default main context of the thread which
+ * called fwupd_client_new().
+ *
  * Since: 1.5.0
  **/
 void
@@ -4233,6 +4266,10 @@ fwupd_client_upload_bytes_thread_cb (GTask *task,
  *
  * You must have called fwupd_client_connect_async() on @self before using
  * this method.
+ *
+ * NOTE: This method is thread-safe, but progress signals will be
+ * emitted in the thread default main context of the thread which
+ * called fwupd_client_new().
  *
  * Since: 1.5.0
  **/
@@ -4630,6 +4667,8 @@ fwupd_client_class_init (FwupdClientClass *klass)
 static void
 fwupd_client_init (FwupdClient *self)
 {
+	FwupdClientPrivate *priv = GET_PRIVATE (self);
+	priv->main_ctx_prxy = g_main_context_ref_thread_default ();
 }
 
 static void
@@ -4638,7 +4677,8 @@ fwupd_client_finalize (GObject *object)
 	FwupdClient *self = FWUPD_CLIENT (object);
 	FwupdClientPrivate *priv = GET_PRIVATE (self);
 
-	g_clear_pointer (&priv->main_ctx, g_main_context_unref);
+	g_clear_pointer (&priv->main_ctx_sync, g_main_context_unref);
+	g_clear_pointer (&priv->main_ctx_prxy, g_main_context_unref);
 	g_free (priv->user_agent);
 	g_free (priv->daemon_version);
 	g_free (priv->host_product);
